@@ -51,3 +51,13 @@ npm run dev
 
 ### Health Check
 After deployment, verify it's working by visiting: `https://your-domain.vercel.app/api/health`
+
+## Vercel CLI Deployment
+
+For advanced users, you can also deploy using the Vercel CLI:
+```bash
+npm i -g vercel
+vercel login
+vercel link
+vercel --prod
+```
