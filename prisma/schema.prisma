@@ -1,0 +1,114 @@
+// This is your Prisma schema file,
+// learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  memberships  Membership[]
+  watchlist    Watchlist[]
+  uploads      Upload[]
+}
+
+model Workspace {
+  id          String        @id @default(cuid())
+  name        String
+  createdAt   DateTime      @default(now())
+  memberships Membership[]
+  artists     Artist[]
+  uploads     Upload[]
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  role        String
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+
+  @@unique([userId, workspaceId])
+}
+
+model Artist {
+  id             String          @id @default(cuid())
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id])
+  workspaceId    String
+  name           String
+  luminateId     String?         @unique
+  soundcloudUrl  String?
+  youtubeChannel String?
+  instagram      String?
+  tiktok         String?
+  createdAt      DateTime        @default(now())
+  streams        StreamWeekly[]
+  social         SocialStat[]
+  watchlistedBy  Watchlist[]
+
+  @@index([workspaceId, name])
+  @@unique([workspaceId, name], name: "workspaceId_name")
+}
+
+model StreamWeekly {
+  id          String   @id @default(cuid())
+  artist      Artist   @relation(fields: [artistId], references: [id])
+  artistId    String
+  weekStart   DateTime
+  source      String
+  streams     Int
+  upload      Upload?  @relation(fields: [uploadId], references: [id])
+  uploadId    String?
+  region     String   @default("US") // "US" or "Global"
+
+
+  @@unique([artistId, weekStart, source])
+  @@index([weekStart])
+}
+
+model SocialStat {
+  id        String   @id @default(cuid())
+  artist    Artist   @relation(fields: [artistId], references: [id])
+  artistId  String
+  platform  String
+  date      DateTime
+  followers Int?
+  views     Int?
+  likes     Int?
+  comments  Int?
+
+  @@index([artistId, platform, date])
+}
+
+model Upload {
+  id           String         @id @default(cuid())
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id])
+  workspaceId  String
+  uploadedBy   User           @relation(fields: [uploadedById], references: [id])
+  uploadedById String
+  createdAt    DateTime       @default(now())
+  fileHash     String?
+  rowCount     Int            @default(0)
+  streams      StreamWeekly[]
+}
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  artist    Artist   @relation(fields: [artistId], references: [id])
+  artistId  String
+  starredAt DateTime @default(now())
+
+  @@unique([userId, artistId])
+}

@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -------- Theme tokens (strict black & white) -------- */
+:root {
+	--bg: #000;            /* page background */
+	--panel: #0a0a0a;      /* surfaces/cards/nav */
+	--border: #202020;     /* outlines & dividers */
+	--text: #fff;          /* primary text */
+	--muted: #c5c5c5;      /* secondary text */
+	--muted-2: #9a9a9a;    /* tertiary text */
+	--focus: #fff;         /* focus ring (white) */
+}
+
+html, body { height: 100%; }
+
+/* Apply theme globally */
+.theme-bw {
+	background: var(--bg);
+	color: var(--text);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Remove default link blue/purple */
+a { color: var(--text); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Selection (gray-white only) */
+::selection { background: #333; color: #fff; }
+
+/* ----- Reusable primitives ----- */
+.container-xx { @apply mx-auto max-w-6xl px-4; }
+
+.panel   { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+.pad     { @apply p-4 md:p-6; }
+.muted   { color: var(--muted); }
+.muted-2 { color: var(--muted-2); }
+.h1      { @apply text-2xl md:text-3xl font-semibold tracking-tight; }
+.h2      { @apply text-lg md:text-xl font-semibold; }
+
+.tbl                { width: 100%; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.tbl thead th       { background: #0f0f0f; color: var(--muted); text-align: left; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.tbl tbody td       { padding: 10px; border-top: 1px solid var(--border); font-size: 14px; }
+.tbl tr:hover td    { background: #0c0c0c; }
+
+.btn        { @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium; border: 1px solid var(--border); background: transparent; color: var(--text); }
+.btn:hover  { background: #111; }
+.btn-ghost  { background: #111; }
+.btn-ghost:hover { background: #161616; }
+.btn-muted  { color: var(--muted); }
+.btn-full   { @apply w-full; }
+
+.input {
+	width: 100%;
+	background: #0d0d0d;
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 8px 10px;
+}
+.input::placeholder { color: var(--muted-2); }
+.input:focus { outline: none; box-shadow: 0 0 0 2px var(--focus) inset; }
+
+
