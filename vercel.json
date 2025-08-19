@@ -1,5 +1,0 @@
-{
-  "functions": { "api/**.js": { "maxDuration": 60 } },
-  "installCommand": "npm ci",
-  "buildCommand": "npm run build"
-}

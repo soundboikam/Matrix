@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
-    "start": "next start -p %PORT%",
+    "build": "next build",
+    "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
