@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
     const passwordHash = await bcrypt.hash("kamilek", 10);
     const user = await prisma.user.create({
       data: {
+        username: "kam", // Add username since it's required in schema
         email: "kam@matrix.local",
         name: "Kam",
         passwordHash: passwordHash,
