@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoMatrix from "./LogoMatrix";
+import LogoutButton from "./LogoutButton";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
@@ -47,12 +48,18 @@ export default function Nav() {
               </Link>
             );
           })}
-          
+        </nav>
+
+        {/* Right side: Data badge and Logout button */}
+        <div className="flex items-center gap-3">
           {/* Data Type Badge */}
-          <div className="ml-4 px-2 py-1 text-xs bg-zinc-800/60 border border-zinc-700 rounded text-zinc-300">
+          <div className="px-2 py-1 text-xs bg-zinc-800/60 border border-zinc-700 rounded text-zinc-300">
             Data: {defaultDataType}
           </div>
-        </nav>
+          
+          {/* Logout Button */}
+          <LogoutButton />
+        </div>
       </div>
     </header>
   );
