@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix API Tester</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+        .button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px 5px; }
+        .button:hover { background: #0056b3; }
+        .button:disabled { background: #ccc; cursor: not-allowed; }
+        .result { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; margin: 10px 0; white-space: pre-wrap; }
+        .success { border-color: #28a745; background: #d4edda; }
+        .error { border-color: #dc3545; background: #f8d7da; }
+        .step { background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 5px; padding: 15px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Matrix API Tester</h1>
+    
+    <div class="step">
+        <h3>Step 1: Setup Database Schema</h3>
+        <p>This will create all the necessary database tables.</p>
+        <button class="button" onclick="setupSchema()">Setup Database Schema</button>
+        <div id="schemaResult"></div>
+    </div>
+    
+    <div class="step">
+        <h3>Step 2: Create User Account</h3>
+        <p>This will create your login account and workspace.</p>
+        <button class="button" onclick="setupUser()" id="setupUserBtn" disabled>Create User Account</button>
+        <div id="userResult"></div>
+    </div>
+    
+    <div class="step">
+        <h3>Step 3: Test Login</h3>
+        <p>After completing steps 1 & 2, try logging in at:</p>
+        <a href="https://matrix-gray.vercel.app/login" target="_blank">https://matrix-gray.vercel.app/login</a>
+        <p><strong>Email:</strong> kam@matrix.local<br><strong>Password:</strong> kamilek</p>
+    </div>
+
+    <script>
+        async function setupSchema() {
+            const button = event.target;
+            const resultDiv = document.getElementById('schemaResult');
+            
+            button.disabled = true;
+            button.textContent = 'Setting up schema...';
+            resultDiv.innerHTML = '⏳ Setting up database schema...';
+            
+            try {
+                const response = await fetch('/api/setup-schema', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `<div class="result success">✅ Schema setup successful!\n\n${JSON.stringify(data, null, 2)}</div>`;
+                    document.getElementById('setupUserBtn').disabled = false;
+                } else {
+                    resultDiv.innerHTML = `<div class="result error">❌ Schema setup failed:\n\n${JSON.stringify(data, null, 2)}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">❌ Error: ${error.message}</div>`;
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Setup Database Schema';
+            }
+        }
+        
+        async function setupUser() {
+            const button = event.target;
+            const resultDiv = document.getElementById('userResult');
+            
+            button.disabled = true;
+            button.textContent = 'Creating user...';
+            resultDiv.innerHTML = '⏳ Creating user account...';
+            
+            try {
+                const response = await fetch('/api/setup', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `<div class="result success">✅ User setup successful!\n\n${JSON.stringify(data, null, 2)}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="result error">❌ User setup failed:\n\n${JSON.stringify(data, null, 2)}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">❌ Error: ${error.message}</div>`;
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Create User Account';
+            }
+        }
+    </script>
+</body>
+</html>
