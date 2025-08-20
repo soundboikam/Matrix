@@ -16,8 +16,8 @@ export const authOptions: NextAuthOptions = {
       async authorize(creds) {
         if (!creds?.username || !creds.password) return null;
         
-        // For now, treat username as email since database doesn't have username field yet
-        const user = await prisma.user.findUnique({ where: { email: creds.username } });
+        // Search by username since we created the user with username field
+        const user = await prisma.user.findUnique({ where: { username: creds.username } });
         
         if (!user) return null;
         const ok = await bcrypt.compare(creds.password, user.passwordHash);
