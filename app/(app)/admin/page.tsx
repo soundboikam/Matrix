@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function AdminPage() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -20,14 +20,14 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, name, password }),
+        body: JSON.stringify({ username, name, password }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        setMessage(`User created successfully: ${data.user.email}`);
-        setEmail("");
+        setMessage(`User created successfully: ${data.user.username}`);
+        setUsername("");
         setName("");
         setPassword("");
       } else {
@@ -46,11 +46,11 @@ export default function AdminPage() {
       
       <form onSubmit={createUser} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2">Email</label>
+          <label className="block text-sm font-medium mb-2">Username</label>
           <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="w-full p-2 border border-gray-300 rounded bg-white text-black"
             required
           />

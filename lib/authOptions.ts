@@ -12,13 +12,13 @@ export const authOptions: NextAuthOptions = {
   providers: [
     Credentials({
       name: "Credentials",
-      credentials: { email: { label: "Email", type: "text" }, password: { label: "Password", type: "password" } },
+      credentials: { username: { label: "Username", type: "text" }, password: { label: "Password", type: "password" } },
       async authorize(creds) {
-        if (!creds?.email || !creds.password) return null;
-        const user = await prisma.user.findUnique({ where: { email: creds.email } });
+        if (!creds?.username || !creds.password) return null;
+        const user = await prisma.user.findUnique({ where: { username: creds.username } });
         if (!user) return null;
         const ok = await bcrypt.compare(creds.password, user.passwordHash);
-        return ok ? { id: user.id, email: user.email, name: user.name ?? null } : null;
+        return ok ? { id: user.id, username: user.username, email: user.email, name: user.name ?? null } : null;
       },
     }),
   ],
