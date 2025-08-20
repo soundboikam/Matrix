@@ -4,7 +4,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("kam");
+  const [username, setUsername] = useState("kam@matrix.local");
   const [password, setPassword] = useState("kamilek");
   const [error, setError] = useState("");
   const router = useRouter();
@@ -17,7 +17,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-white text-black flex items-center justify-center">
       <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4 border p-6 rounded">
         <h1 className="text-2xl font-semibold">Matrix Sign In</h1>
-        <input className="w-full border p-2 rounded" value={username} onChange={e=>setUsername(e.target.value)} placeholder="Username" /> 
+        <input className="w-full border p-2 rounded" value={username} onChange={e=>setUsername(e.target.value)} placeholder="Email" /> 
         <input className="w-full border p-2 rounded" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" />
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button className="w-full border p-2 rounded hover:bg-black hover:text-white">Sign In</button>
