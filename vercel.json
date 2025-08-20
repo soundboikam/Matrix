@@ -1,0 +1,7 @@
+{
+  "framework": "nextjs",
+  "ignoreCommand": "exit 1",
+  "functions": {
+    "app/api/**": { "maxDuration": 60, "memory": 1024 }
+  }
+}
