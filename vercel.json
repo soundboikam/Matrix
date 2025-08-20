@@ -1,7 +1,7 @@
 {
   "framework": "nextjs",
-  "ignoreCommand": "exit 1",
   "functions": {
-    "app/api/**": { "maxDuration": 60, "memory": 1024 }
+    "app/api/**/route.ts": { "maxDuration": 60 },
+    "app/api/**/route.js": { "maxDuration": 60 }
   }
 }
