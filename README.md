@@ -52,6 +52,11 @@ npm run dev
 ### Health Check
 After deployment, verify it's working by visiting: `https://your-domain.vercel.app/api/health`
 
+### Vercel Functions Pattern
+This project uses Next.js App Router. Serverless functions live under `app/api/**`.
+Ensure the Vercel Project Settings → Functions do not include a legacy `api/**` pattern.
+If present, remove it or change to `app/api/**`. The repo's `vercel.json` expects App Router.
+
 ## Vercel CLI Deployment
 
 For advanced users, you can also deploy using the Vercel CLI:
