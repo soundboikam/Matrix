@@ -2,6 +2,8 @@
 
 A Next.js + Prisma application for managing artist streaming data with US/Global region support.
 
+<!-- Last updated: 2025-08-19 22:30 UTC -->
+
 ## Features
 
 - Artist management and streaming data tracking
