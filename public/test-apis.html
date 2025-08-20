@@ -49,8 +49,13 @@
             resultDiv.innerHTML = '⏳ Setting up database schema...';
             
             try {
+                console.log('Calling setup-schema API...');
                 const response = await fetch('/api/setup-schema', { method: 'POST' });
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
                 const data = await response.json();
+                console.log('Response data:', data);
                 
                 if (data.success) {
                     resultDiv.innerHTML = `<div class="result success">✅ Schema setup successful!\n\n${JSON.stringify(data, null, 2)}</div>`;
@@ -59,7 +64,8 @@
                     resultDiv.innerHTML = `<div class="result error">❌ Schema setup failed:\n\n${JSON.stringify(data, null, 2)}</div>`;
                 }
             } catch (error) {
-                resultDiv.innerHTML = `<div class="result error">❌ Error: ${error.message}</div>`;
+                console.error('Setup schema error:', error);
+                resultDiv.innerHTML = `<div class="result error">❌ Error: ${error.message}\n\nCheck browser console for more details.</div>`;
             } finally {
                 button.disabled = false;
                 button.textContent = 'Setup Database Schema';
