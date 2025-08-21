@@ -4,22 +4,36 @@ import React, { useState } from "react";
 import { parseCsv, type ParsedRow } from "@/utils/parseCsv";
 
 export default function UploadPage() {
-  const [preview, setPreview] = useState<ParsedRow[]>([]);
+  const [previewRows, setPreviewRows] = useState<ParsedRow[]>([]);
+  const [excluded, setExcluded] = useState<Set<number>>(new Set());
   const [file, setFile] = useState<File | null>(null);
   const [weekStart, setWeekStart] = useState("");
   const [dataType, setDataType] = useState<"US" | "GLOBAL">("US");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const includedCount = previewRows.length - excluded.size;
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     setFile(f);
     setMsg("");
-    setPreview([]);
-    if (!f) return;
+    setExcluded(new Set());
+    if (!f) {
+      setPreviewRows([]);
+      return;
+    }
     const text = await f.text();
     const rows = await parseCsv(text);
-    setPreview(rows);
+    setPreviewRows(rows);
+  }
+
+  function toggleExclude(i: number) {
+    setExcluded(prev => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
   }
 
   async function handleImport() {
@@ -86,29 +100,45 @@ export default function UploadPage() {
       )}
 
       <div className="text-sm text-zinc-400">
-        Rows in file: <b>{preview.length}</b>
+        Rows in file: <b>{previewRows.length}</b> · Included: <b>{includedCount}</b> · Excluded: <b>{excluded.size}</b>
       </div>
 
       <div className="overflow-auto border border-zinc-800 rounded">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-zinc-900 text-zinc-300">
+              <th className="text-left px-2 py-2">Action</th>
               <th className="text-left px-3 py-2">Artist</th>
               <th className="text-left px-3 py-2">Streams</th>
               <th className="text-left px-3 py-2">Week (CSV)</th>
             </tr>
           </thead>
           <tbody>
-            {preview.map((r, i) => (
-              <tr key={i} className="border-t border-zinc-800">
-                <td className="px-3 py-2">{r.artist}</td>
-                <td className="px-3 py-2">{r.streams.toLocaleString()}</td>
-                <td className="px-3 py-2">{r.week ?? "—"}</td>
-              </tr>
-            ))}
-            {!preview.length && (
+            {previewRows.map((r, i) => {
+              const isExcluded = excluded.has(i);
+              return (
+                <tr key={i} className={`border-t border-zinc-800 ${isExcluded ? "opacity-40" : ""}`}>
+                  <td className="px-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleExclude(i)}
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded border ${
+                        isExcluded ? "border-sky-500 text-sky-400" : "border-red-500 text-red-400"
+                      }`}
+                      title={isExcluded ? "Restore this row" : "Exclude this row"}
+                    >
+                      {isExcluded ? "↩" : "✕"}
+                    </button>
+                  </td>
+                  <td className="px-3 py-2">{r.artist || "—"}</td>
+                  <td className="px-3 py-2">{Number.isFinite(r.streams) ? r.streams.toLocaleString() : "—"}</td>
+                  <td className="px-3 py-2">{r.week ?? "—"}</td>
+                </tr>
+              );
+            })}
+            {!previewRows.length && (
               <tr>
-                <td colSpan={3} className="px-3 py-6 text-zinc-500">
+                <td colSpan={4} className="px-3 py-6 text-zinc-500">
                   No preview yet — choose a CSV above.
                 </td>
               </tr>
