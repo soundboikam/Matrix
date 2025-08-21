@@ -5,43 +5,40 @@ import { parseCsv, type ParsedRow } from "@/utils/parseCsv";
 
 export default function UploadPage() {
   const [preview, setPreview] = useState<ParsedRow[]>([]);
-  const [fileName, setFileName] = useState<string>("");
-  const [weekStart, setWeekStart] = useState<string>("");
+  const [file, setFile] = useState<File | null>(null);
+  const [weekStart, setWeekStart] = useState("");
   const [dataType, setDataType] = useState<"US" | "GLOBAL">("US");
+  const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string>("");
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const f = e.target.files?.[0] ?? null;
+    setFile(f);
     setMsg("");
-    setFileName(file.name);
-    const text = await file.text();
+    setPreview([]);
+    if (!f) return;
+    const text = await f.text();
     const rows = await parseCsv(text);
     setPreview(rows);
   }
 
   async function handleImport() {
-    if (!preview.length) {
-      setMsg("Nothing to import.");
+    if (!file) {
+      setMsg("Please choose a CSV file first.");
       return;
     }
     setLoading(true);
     setMsg("");
+    const form = new FormData();
+    form.append("file", file);
+    if (weekStart) form.append("weekStart", weekStart);
+    form.append("dataType", dataType);
+
     try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rows: preview,
-          weekStart,
-          dataType,
-          sourceFile: fileName,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Import failed");
-      setMsg(`Imported ${data.created ?? 0} rows successfully.`);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Import failed");
+      setMsg(`Imported: ${json.created} | Skipped: ${json.skipped} (source: ${json.source})`);
     } catch (err: any) {
       setMsg(err?.message ?? "Import failed");
     } finally {
@@ -52,7 +49,6 @@ export default function UploadPage() {
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-xl font-semibold">Import weekly CSV</h1>
-
       <div className="flex items-center gap-3 flex-wrap">
         <input type="file" accept=".csv" onChange={handleFileChange} />
         <select
@@ -65,10 +61,10 @@ export default function UploadPage() {
         </select>
         <input
           type="date"
-          placeholder="Week start"
           value={weekStart}
           onChange={(e) => setWeekStart(e.target.value)}
           className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1"
+          placeholder="Week start"
         />
         <button
           onClick={handleImport}
@@ -77,14 +73,11 @@ export default function UploadPage() {
         >
           {loading ? "Importing…" : "Import to Database"}
         </button>
-        {!!fileName && (
-          <span className="text-sm text-zinc-400">File: {fileName}</span>
-        )}
       </div>
 
-      {!!msg && (
-        <div className="text-sm">
-          {msg.includes("success") ? (
+      {msg && (
+        <div className="text-sm mt-2">
+          {msg.toLowerCase().includes("imported") ? (
             <span className="text-emerald-400">{msg}</span>
           ) : (
             <span className="text-red-400">{msg}</span>
