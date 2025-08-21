@@ -1,40 +1,40 @@
 // app/(app)/upload/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React from "react";
 import Papa from "papaparse";
 
-type PreviewRow = { artist?: string; streams?: number | null; week?: string | null };
-
-const norm = (s: string) =>
-  s.toLowerCase().trim().replace(/\u00a0/g, " ").replace(/[\s\-]+/g, "_");
-
-const asNumber = (v: any): number | null => {
-  if (v == null) return null;
-  const s = String(v).replace(/,/g, "").trim();
-  if (s === "" || s === "—" || s === "-") return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+type PreviewRow = {
+  artist?: string;
+  streams?: number | null;
+  week?: string | null;
+  _raw?: Record<string, any>;
 };
 
-// Candidate lists for flexible header matching
-const ARTIST_KEYS = [
+const norm = (s: string) =>
+  s.toLowerCase().trim().replace(/[\s\-\/]+/g, "_").replace(/[^\w]/g, "");
+
+const ARTIST_HEADERS = [
   "artist",
   "artist_name",
   "name",
-  "artistid", // sometimes exported
-  "artist_id",
+  "track_artist", // sometimes MC exports are weird
 ];
-const STREAMS_KEYS = [
+const STREAMS_HEADERS = [
   "streams",
   "total_streams",
-  "this_week",
-  "streams_this_week",
-  "plays",
-  "plays_this_week",
   "weekly_streams",
+  "this_week",
+  "week_streams",
+  "count",
 ];
-const WEEK_KEYS = ["week", "date", "week_start", "week_commencing", "week_of"];
+const DATE_HEADERS = [
+  "week",
+  "week_start",
+  "date",
+  "report_date",
+  "collection_week",
+];
 
 function pick(row: Record<string, any>, candidates: string[]) {
   for (const c of candidates) {
@@ -46,189 +46,243 @@ function pick(row: Record<string, any>, candidates: string[]) {
   return undefined;
 }
 
-export default function UploadPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [weekStart, setWeekStart] = useState<string>("");
-  const [dataType, setDataType] = useState<"US" | "GLOBAL">("US");
-  const [rows, setRows] = useState<any[]>([]);
-  const [excluded, setExcluded] = useState<Set<number>>(new Set());
-  const [parsing, setParsing] = useState(false);
+function tryParseNumber(v: any): number | null {
+  if (v == null) return null;
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const cleaned = v
+      .replace(/\uFEFF/g, "") // BOM
+      .replace(/,/g, "") // 1,234
+      .replace(/\s+/g, "")
+      .replace(/[^\d.\-]/g, ""); // strip other junk
+    if (cleaned === "" || cleaned === "-" || cleaned === "—") return null;
+    const n = Number(cleaned);
+   return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
 
-  // Parse CSV on file change
-  useEffect(() => {
-    if (!file) {
-      setRows([]);
-      return;
-    }
-    setParsing(true);
-    Papa.parse(file, {
+function tryParseDateStr(v: any): string | null {
+  if (!v || typeof v !== "string") return null;
+  const s = v.trim().replace(/\uFEFF/g, "");
+  if (!s) return null;
+  // Let server validate; here only normalize simple cases:
+  // Accept MM/DD/YYYY, YYYY-MM-DD, etc. Keep original string;
+  // server will coerce to ISO week start.
+  return s;
+}
+
+export default function UploadPage() {
+  const [file, setFile] = React.useState<File | null>(null);
+  const [dataType, setDataType] = React.useState<"US" | "Global">("US");
+  const [weekStart, setWeekStart] = React.useState<string>("");
+  const [rows, setRows] = React.useState<PreviewRow[]>([]);
+  const [excluded, setExcluded] = React.useState<Set<number>>(new Set());
+  const [info, setInfo] = React.useState<{ total: number; included: number; excluded: number }>({ total: 0, included: 0, excluded: 0 });
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setFile(f);
+    setRows([]);
+    setExcluded(new Set());
+    setInfo({ total: 0, included: 0, excluded: 0 });
+    setError(null);
+    if (f) parsePreview(f);
+  }
+
+  function parsePreview(f: File) {
+    setLoading(true);
+    setError(null);
+
+    // Some Excel CSVs have BOM, weird delimiters; let Papa try,
+    // but also provide fallback delimiter auto-detection.
+    Papa.parse(f, {
       header: true,
       skipEmptyLines: true,
+      dynamicTyping: false,
+      transformHeader: (h) => h.replace(/\uFEFF/g, ""), // strip BOM in header
       complete: (res) => {
-        const items = Array.isArray(res.data) ? (res.data as any[]) : [];
-        setRows(items);
-        setExcluded(new Set());
-        setParsing(false);
+        const raw = (res.data as any[]) ?? [];
+        const preview: PreviewRow[] = raw.map((r) => {
+          // normalize keys strip BOM in values too
+          const cleaned: Record<string, any> = {};
+          for (const [k, v] of Object.entries(r)) {
+            cleaned[k] = typeof v === "string" ? v.replace(/\uFEFF/g, "") : v;
+          }
+          const artist = pick(cleaned, ARTIST_HEADERS);
+          const streams = tryParseNumber(pick(cleaned, STREAMS_HEADERS));
+          const dateStr = pick(cleaned, DATE_HEADERS);
+          const week = dateStr ? tryParseDateStr(dateStr) : null;
+          return {
+            artist: artist ? String(artist).trim() : undefined,
+            streams: streams,
+            week,
+            _raw: cleaned,
+          };
+        });
+
+        setRows(preview);
+        setInfo({
+          total: preview.length,
+          included: preview.length,
+          excluded: 0,
+        });
+        setLoading(false);
       },
-      error: () => {
-      setRows([]);
-      setParsing(false);
+      error: (err) => {
+        setLoading(false);
+        setError(err?.message || "Failed to parse CSV");
       },
     });
-  }, [file]);
+  }
 
-  const previewRows: PreviewRow[] = useMemo(() => {
-    return rows.slice(0, 25).map((raw) => {
-      const artist = pick(raw, ARTIST_KEYS) ?? "";
-      const dateVal = pick(raw, WEEK_KEYS);
-      const streamsVal = pick(raw, STREAMS_KEYS);
-
-      const week = (dateVal ? String(dateVal) : weekStart) || null;
-      const streams = asNumber(streamsVal);
-
-      return {
-        artist: artist ? String(artist) : "",
-        streams: streams ?? null,
-        week,
-      };
-    });
-  }, [rows, weekStart]);
-
-  const includedCount = useMemo(() => rows.length - excluded.size, [rows.length, excluded]);
-
-  function toggleExclude(idx: number) {
+  function toggleExclude(ix: number) {
     const next = new Set(excluded);
-    if (next.has(idx)) next.delete(idx);
-    else next.add(idx);
+    if (next.has(ix)) next.delete(ix);
+    else next.add(ix);
     setExcluded(next);
+    setInfo((old) => ({
+      total: old.total,
+      included: old.total - next.size,
+      excluded: next.size,
+    }));
   }
 
   async function handleImport() {
-    if (!file) return;
-    // Build a filtered array for upload (respect excludes)
-    const filtered = rows
-      .map((raw, idx) => ({ raw, idx }))
-      .filter((x) => !excluded.has(x.idx))
-      .map((x) => x.raw);
+    setLoading(true);
+    setError(null);
+    try {
+      const includedRows = rows
+        .map((r, ix) => ({ ...r, _ix: ix }))
+        .filter((r) => !excluded.has(r._ix))
+        .map((r) => ({ artist: r.artist, streams: r.streams, week: r.week }));
 
-   const payload = {
-      dataType, // "US" | "GLOBAL"
-      weekStart: weekStart || null,
-      rows: filtered,
-    };
+      if (!includedRows.length) {
+        setLoading(false);
+        setError("No rows selected to import.");
+        return;
+      }
 
-    const res = await fetch("/api/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const out = await res.json().catch(() => ({} as any));
-    if (!res.ok) {
-      alert(out?.error || "Import failed");
-    } else {
-      alert(`Imported: ${out?.created ?? 0}, skipped: ${out?.skipped ?? 0}`);
+      // If none of the rows have a week value, require a weekStart selection
+      const anyWeekInFile = includedRows.some((r) => r.week);
+      if (!anyWeekInFile && !weekStart) {
+        setLoading(false);
+        setError("Your CSV has no date column. Please select Week start before importing.");
+        return;
+      }
+
+      const body = {
+        dataType,
+        weekStart: weekStart || null,
+        rows: includedRows,
+      };
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Upload failed");
+      alert(`Imported: ${json?.created ?? 0}, Skipped: ${json?.skipped ?? 0}`);
+    } catch (e: any) {
+      setError(e?.message || "Upload failed");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="h1">Import weekly CSV</h1>
-
-      <p className="text-sm text-zinc-400">
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      <h1 className="h1 mb-6">Import weekly CSV</h1>
+      <p className="text-zinc-400 mb-4">
         We auto-detect common Music Connect headers. If your CSV has no date column, set a Week Start.
       </p>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1 text-sm"
-        />
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <input type="file" accept=".csv,text/csv" onChange={handleFileChange} className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2" />
 
-        <span className="text-sm text-zinc-400">Data type:</span>
-        <select
-          value={dataType}
-          onChange={(e) => setDataType(e.target.value as "US" | "GLOBAL")}
-          className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        >
-          <option value="US">US</option>
-          <option value="GLOBAL">Global</option>
-        </select>
+        {/* Data type: US / Global */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-zinc-300">Data type:</label>
+          <select
+            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+            value={dataType}
+            onChange={(e) => setDataType(e.target.value as any)}
+          >
+            <option value="US">US</option>
+            <option value="Global">Global</option>
+          </select>
+        </div>
 
-        <span className="text-sm text-zinc-400">Week start</span>
-        <input
-          type="date"
-          value={weekStart}
-          onChange={(e) => setWeekStart(e.target.value)}
-          className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
-        />
+        {/* Week start (optional if CSV has a date) */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-zinc-300">Week start</label>
+          <input
+            type="date"
+            value={weekStart}
+            onChange={(e) => setWeekStart(e.target.value)}
+            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+          />
+        </div>
 
         <button
+          disabled={!rows.length || loading}
           onClick={handleImport}
-          className="ml-auto rounded-md bg-emerald-600 px-3 py-1 text-sm text-white hover:bg-emerald-500"
-          disabled={!rows.length || parsing}
+          className="ml-auto rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 px-4 py-2 text-sm font-medium"
         >
-          Import to Database
+          {loading ? "Importing..." : "Import to Database"}
         </button>
       </div>
 
-      <div className="text-sm text-zinc-400">
-        Rows in file: <span className="text-zinc-200">{rows.length}</span> · Included:{" "}
-        <span className="text-zinc-200">{includedCount}</span> · Excluded:{" "}
-        <span className="text-zinc-200">{excluded.size}</span>
+      <div className="text-sm text-zinc-400 mb-2">
+        Rows in file: <b>{info.total}</b> · Included: <b>{info.included}</b> · Excluded: <b>{info.excluded}</b>
       </div>
 
-      <div className="rounded-md border border-zinc-800">
-        <div className="border-b border-zinc-800 px-3 py-2 text-sm text-zinc-400">
-          Preview (click <span className="text-red-400 font-semibold">✕</span> to exclude a row; click again to restore)
+      {error && (
+        <div className="mb-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-red-300">
+          {error}
+        </div>
+      )}
+
+      <div className="rounded border border-zinc-800 bg-zinc-900">
+        <div className="px-3 py-2 text-sm text-zinc-400">
+          Preview (click <span className="text-red-400">✖</span> to exclude a row)
         </div>
         <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-zinc-900/40 text-zinc-400">
-                <th className="w-10 px-2 py-2 text-left"> </th>
+          <table className="min-w-full text-sm">
+            <thead className="bg-zinc-950/60">
+              <tr>
+                <th className="w-10 px-2 py-2"></th>
                 <th className="px-3 py-2 text-left">Artist</th>
                 <th className="px-3 py-2 text-left">Streams</th>
                 <th className="px-3 py-2 text-left">Week</th>
               </tr>
             </thead>
             <tbody>
-              {previewRows.map((r, i) => {
-                const rowIndex = i; // preview index (0..25); exclude includes actual index mapping below
-                const excludedFlag = excluded.has(i);
+              {rows.map((r, ix) => {
+                const isEx = excluded.has(ix);
                 return (
-                  <tr key={i} className="border-t border-zinc-800">
+                  <tr key={ix} className={isEx ? "opacity-50" : ""}>
                     <td className="px-2 py-2">
                       <button
-                        className={`rounded-md border px-2 py-1 ${
-                          excludedFlag
-                            ? "border-zinc-700 text-zinc-500"
-                            : "border-red-500 text-red-400 hover:bg-red-500/10"
+                        onClick={() => toggleExclude(ix)}
+                        className={`h-6 w-6 rounded border px-0 text-center ${
+                          isEx ? "border-emerald-500 text-emerald-400" : "border-red-500 text-red-400"
                         }`}
-                        title={excludedFlag ? "Restore row" : "Exclude row"}
-                        onClick={() => toggleExclude(rowIndex)}
+                        title={isEx ? "Restore row" : "Exclude row"}
                       >
-                        ✕
+                        {isEx ? "↩" : "✖"}
                       </button>
                     </td>
-                    <td className="px-3 py-2 text-zinc-200">{r.artist || "—"}</td>
-                    <td className="px-3 py-2 text-zinc-200">
-                      {r.streams == null ? "—" : r.streams.toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-200">{r.week || "—"}</td>
+                    <td className="px-3 py-2">{r.artist ?? "—"}</td>
+                    <td className="px-3 py-2">{r.streams != null ? r.streams.toLocaleString() : "—"}</td>
+                    <td className="px-3 py-2">{r.week ?? (weekStart ? `(will use ${weekStart})` : "—")}</td>
                   </tr>
                 );
               })}
-              {!previewRows.length && (
-                <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-zinc-500">
-                    {parsing
-                      ? "Parsing CSV…"
-                      : "Select a CSV to preview. If your file has no date column, set the Week Start above."}
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

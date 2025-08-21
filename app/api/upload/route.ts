@@ -1,122 +1,112 @@
 // app/api/upload/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../lib/authOptions";
 
 const prisma = new PrismaClient();
 
-const norm = (s: string) =>
-  s.toLowerCase().trim().replace(/\u00a0/g, " ").replace(/[\s\-]+/g, "_");
-
-const asNumber = (v: any): number | null => {
-  if (v == null) return null;
-  const s = String(v).replace(/,/g, "").trim();
-  if (s === "" || s === "—" || s === "-") return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-};
-
-const ARTIST_KEYS = ["artist", "artist_name", "name", "artistid", "artist_id"];
-const STREAMS_KEYS = [
-  "streams",
-  "total_streams",
-  "this_week",
-  "streams_this_week",
-  "plays",
-  "plays_this_week",
-  "weekly_streams",
-];
-const WEEK_KEYS = ["week", "date", "week_start", "week_commencing", "week_of"];
-
-function pick(row: Record<string, any>, candidates: string[]) {
-  for (const c of candidates) {
-    const want = norm(c);
-    for (const k of Object.keys(row)) {
-      if (norm(k) === want) return row[k];
-    }
-  }
-  return undefined;
+function toISODate(d: Date) {
+  // YYYY-MM-DD
+  return d.toISOString().slice(0, 10);
 }
 
-export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  const userId = (session as any)?.user?.id as string | undefined;
-  if (!userId) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+// Given any date string, coerce to week start (Monday) ISO date
+function coerceWeekStart(dateStr: string): string | null {
+  const tryD = new Date(dateStr);
+  if (isNaN(tryD.getTime())) return null;
+  // Make Monday week-start (0 = Sun, 1 = Mon)
+  const day = tryD.getUTCDay();
+  const diff = (day + 6) % 7; // days since Monday
+  const monday = new Date(Date.UTC(tryD.getUTCFullYear(), tryD.getUTCMonth(), tryD.getUTCDate()));
+  monday.setUTCDate(monday.getUTCDate() - diff);
+  return toISODate(monday);
+}
 
+export async function POST(req: Request) {
   try {
-    const { dataType, weekStart, rows } = (await req.json()) as {
-      dataType?: "US" | "GLOBAL";
-      weekStart?: string | null;
-      rows: any[];
-    };
-
-    if (!rows?.length) {
-      return NextResponse.json({ error: "No rows received" }, { status: 400 });
+    const session = await getServerSession(authOptions);
+    const userId = (session as any)?.user?.id as string | undefined;
+    if (!userId) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    // Resolve workspace for the current user
-    const membership = await prisma.membership.findFirst({
-      where: { userId },
-      select: { workspaceId: true },
-    });
-    if (!membership) {
-      return NextResponse.json({ error: "No workspace" }, { status: 400 });
+    const body = await req.json();
+    const dataType: "US" | "Global" =
+      body?.dataType === "Global" ? "Global" : "US";
+    const clientWeekStart: string | null = body?.weekStart || null;
+    const rows: Array<{ artist?: string; streams?: number | null; week?: string | null }> =
+      Array.isArray(body?.rows) ? body.rows : [];
+
+    if (!rows.length) {
+      return NextResponse.json({ error: "No rows" }, { status: 400 });
     }
-    const { workspaceId } = membership;
 
     let created = 0;
     let skipped = 0;
 
-    for (const raw of rows) {
-      const artist = pick(raw, ARTIST_KEYS) ?? "";
-      const dateVal = pick(raw, WEEK_KEYS);
-      const streamsVal = pick(raw, STREAMS_KEYS);
+    for (const r of rows) {
+      const name = (r.artist || "").trim();
+      if (!name) { skipped++; continue; }
 
-      const week = (dateVal ? String(dateVal) : weekStart) || null;
-      const streams = asNumber(streamsVal);
+      // Coerce streams
+      const streams =
+        typeof r.streams === "number" && Number.isFinite(r.streams)
+          ? r.streams
+          : null;
 
-      if (!artist || !streams || !week) {
-        skipped++;
-        continue;
+      // Use file week if present; else fall back to client weekStart
+      let weekStartISO: string | null = null;
+      if (r.week) weekStartISO = coerceWeekStart(r.week);
+      if (!weekStartISO && clientWeekStart) weekStartISO = coerceWeekStart(clientWeekStart);
+      if (!weekStartISO) { skipped++; continue; }
+
+      // Resolve workspace for the current user
+      const membership = await prisma.membership.findFirst({
+        where: { userId },
+        select: { workspaceId: true },
+      });
+      if (!membership) {
+        return NextResponse.json({ error: "No workspace" }, { status: 400 });
       }
+      const { workspaceId } = membership;
 
-      // normalize week to YYYY-MM-DD if possible
-      let weekDate = new Date(week);
-      if (isNaN(weekDate.getTime())) {
-        skipped++;
-        continue;
-      }
-      const iso = weekDate.toISOString().slice(0, 10);
-
-      // upsert artist scoped to workspace
+      // Upsert artist scoped to workspace
       const artistRec = await prisma.artist.upsert({
-        where: { workspaceId_name: { workspaceId, name: artist } },
+        where: { workspaceId_name: { workspaceId, name } },
         update: {},
-        create: { name: artist, workspaceId },
+        create: { name, workspaceId },
       });
 
-      // insert row using StreamWeekly table
-      await prisma.streamWeekly.create({
-        data: {
+      // Upsert week row using StreamWeekly table
+      await prisma.streamWeekly.upsert({
+        where: {
+          artistId_weekStart_source: {
+            artistId: artistRec.id,
+            weekStart: new Date(weekStartISO),
+            source: "upload",
+          },
+        },
+        update: {
+          streams: streams ?? 0,
+          region: dataType,
+        },
+        create: {
           artistId: artistRec.id,
-          weekStart: new Date(iso),
-          streams,
+          weekStart: new Date(weekStartISO),
+          streams: streams ?? 0,
           source: "upload",
-          region: dataType === "GLOBAL" ? "Global" : "US",
+          region: dataType,
         },
       });
+
       created++;
     }
 
     return NextResponse.json({ created, skipped });
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: err?.message || "Upload failed" },
-      { status: 500 }
-    );
+  } catch (e: any) {
+    console.error("Upload error:", e);
+    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
 }
 
