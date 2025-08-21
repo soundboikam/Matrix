@@ -19,6 +19,12 @@ const ARTIST_HEADERS = [
   "artist_name",
   "name",
   "track_artist", // sometimes MC exports are weird
+  "artistid",
+  "artist_id",
+  "performer",
+  "title",
+  "track",
+  "song",
 ];
 const STREAMS_HEADERS = [
   "streams",
@@ -27,6 +33,13 @@ const STREAMS_HEADERS = [
   "this_week",
   "week_streams",
   "count",
+  "plays",
+  "plays_this_week",
+  "streams_this_week",
+  "this_week_streams",
+  "streams_count",
+  "total",
+  "volume",
 ];
 const DATE_HEADERS = [
   "week",
@@ -34,6 +47,11 @@ const DATE_HEADERS = [
   "date",
   "report_date",
   "collection_week",
+  "week_of",
+  "week_start_date",
+  "start_date",
+  "period",
+  "reporting_period",
 ];
 
 function pick(row: Record<string, any>, candidates: string[]) {
@@ -105,16 +123,29 @@ export default function UploadPage() {
       transformHeader: (h) => h.replace(/\uFEFF/g, ""), // strip BOM in header
       complete: (res) => {
         const raw = (res.data as any[]) ?? [];
-        const preview: PreviewRow[] = raw.map((r) => {
+        console.log("Raw CSV data:", raw.slice(0, 3)); // Debug: show first 3 rows
+        
+        const preview: PreviewRow[] = raw.map((r, index) => {
           // normalize keys strip BOM in values too
           const cleaned: Record<string, any> = {};
           for (const [k, v] of Object.entries(r)) {
             cleaned[k] = typeof v === "string" ? v.replace(/\uFEFF/g, "") : v;
           }
+          
+          if (index < 3) {
+            console.log(`Row ${index} cleaned:`, cleaned); // Debug: show first 3 cleaned rows
+            console.log(`Row ${index} keys:`, Object.keys(cleaned)); // Debug: show available keys
+          }
+          
           const artist = pick(cleaned, ARTIST_HEADERS);
           const streams = tryParseNumber(pick(cleaned, STREAMS_HEADERS));
           const dateStr = pick(cleaned, DATE_HEADERS);
           const week = dateStr ? tryParseDateStr(dateStr) : null;
+          
+          if (index < 3) {
+            console.log(`Row ${index} parsed:`, { artist, streams, dateStr, week }); // Debug: show parsing results
+          }
+          
           return {
             artist: artist ? String(artist).trim() : undefined,
             streams: streams,
@@ -240,6 +271,25 @@ export default function UploadPage() {
       <div className="text-sm text-zinc-400 mb-2">
         Rows in file: <b>{info.total}</b> · Included: <b>{info.included}</b> · Excluded: <b>{info.excluded}</b>
       </div>
+
+      {/* Debug info - show detected headers */}
+      {rows.length > 0 && (
+        <div className="mb-3 rounded border border-zinc-700 bg-zinc-800/40 px-3 py-2 text-xs">
+          <div className="font-medium text-zinc-300 mb-1">Detected Headers:</div>
+          <div className="text-zinc-400">
+            <div>Available columns: {Object.keys(rows[0]?._raw || {}).join(", ")}</div>
+            <div>Artist detected from: {rows[0]?._raw ? Object.keys(rows[0]._raw).find(k => 
+              ARTIST_HEADERS.some(h => norm(h) === norm(k))
+            ) || "none" : "none"}</div>
+            <div>Streams detected from: {rows[0]?._raw ? Object.keys(rows[0]._raw).find(k => 
+              STREAMS_HEADERS.some(h => norm(h) === norm(k))
+            ) || "none" : "none"}</div>
+            <div>Date detected from: {rows[0]?._raw ? Object.keys(rows[0]._raw).find(k => 
+              DATE_HEADERS.some(h => norm(h) === norm(k))
+            ) || "none" : "none"}</div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-red-300">
