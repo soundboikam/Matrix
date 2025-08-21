@@ -2,93 +2,11 @@
 "use client";
 
 import React from "react";
-import Papa from "papaparse";
+import { parseCsv, type ParsedRow } from "@/utils/parseCsv";
 
-type PreviewRow = {
-  artist?: string;
-  streams?: number | null;
-  week?: string | null;
+type PreviewRow = ParsedRow & {
   _raw?: Record<string, any>;
 };
-
-const norm = (s: string) =>
-  s.toLowerCase().trim().replace(/[\s\-\/]+/g, "_").replace(/[^\w]/g, "");
-
-const ARTIST_HEADERS = [
-  "artist",
-  "artist_name",
-  "name",
-  "track_artist", // sometimes MC exports are weird
-  "artistid",
-  "artist_id",
-  "performer",
-  "title",
-  "track",
-  "song",
-];
-const STREAMS_HEADERS = [
-  "streams",
-  "total_streams",
-  "weekly_streams",
-  "this_week",
-  "week_streams",
-  "count",
-  "plays",
-  "plays_this_week",
-  "streams_this_week",
-  "this_week_streams",
-  "streams_count",
-  "total",
-  "volume",
-];
-const DATE_HEADERS = [
-  "week",
-  "week_start",
-  "date",
-  "report_date",
-  "collection_week",
-  "week_of",
-  "week_start_date",
-  "start_date",
-  "period",
-  "reporting_period",
-];
-
-function pick(row: Record<string, any>, candidates: string[]) {
-  for (const c of candidates) {
-    const want = norm(c);
-    for (const k of Object.keys(row)) {
-      if (norm(k) === want) return row[k];
-    }
-  }
-  return undefined;
-}
-
-function tryParseNumber(v: any): number | null {
-  if (v == null) return null;
-  if (typeof v === "number") return v;
-  if (typeof v === "string") {
-    const cleaned = v
-      .replace(/\uFEFF/g, "") // BOM
-      .replace(/,/g, "") // 1,234
-      .replace(/\s+/g, "")
-      .replace(/[^\d.\-]/g, ""); // strip other junk
-    if (cleaned === "" || cleaned === "-" || cleaned === "—") return null;
-    const n = Number(cleaned);
-   return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
-function tryParseDateStr(v: any): string | null {
-  if (!v || typeof v !== "string") return null;
-  const s = v.trim().replace(/\uFEFF/g, "");
-  if (!s) return null;
-  // Let server validate; here only normalize simple cases:
-  // Accept MM/DD/YYYY, YYYY-MM-DD, etc. Keep original string;
-  // server will coerce to ISO week start.
-  return s;
-}
 
 export default function UploadPage() {
   const [file, setFile] = React.useState<File | null>(null);
@@ -110,63 +28,33 @@ export default function UploadPage() {
     if (f) parsePreview(f);
   }
 
-  function parsePreview(f: File) {
+  async function parsePreview(f: File) {
     setLoading(true);
     setError(null);
 
-    // Some Excel CSVs have BOM, weird delimiters; let Papa try,
-    // but also provide fallback delimiter auto-detection.
-    Papa.parse(f, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: false,
-      transformHeader: (h) => h.replace(/\uFEFF/g, ""), // strip BOM in header
-      complete: (res) => {
-        const raw = (res.data as any[]) ?? [];
-        console.log("Raw CSV data:", raw.slice(0, 3)); // Debug: show first 3 rows
-        
-        const preview: PreviewRow[] = raw.map((r, index) => {
-          // normalize keys strip BOM in values too
-          const cleaned: Record<string, any> = {};
-          for (const [k, v] of Object.entries(r)) {
-            cleaned[k] = typeof v === "string" ? v.replace(/\uFEFF/g, "") : v;
-          }
-          
-          if (index < 3) {
-            console.log(`Row ${index} cleaned:`, cleaned); // Debug: show first 3 cleaned rows
-            console.log(`Row ${index} keys:`, Object.keys(cleaned)); // Debug: show available keys
-          }
-          
-          const artist = pick(cleaned, ARTIST_HEADERS);
-          const streams = tryParseNumber(pick(cleaned, STREAMS_HEADERS));
-          const dateStr = pick(cleaned, DATE_HEADERS);
-          const week = dateStr ? tryParseDateStr(dateStr) : null;
-          
-          if (index < 3) {
-            console.log(`Row ${index} parsed:`, { artist, streams, dateStr, week }); // Debug: show parsing results
-          }
-          
-          return {
-            artist: artist ? String(artist).trim() : undefined,
-            streams: streams,
-            week,
-            _raw: cleaned,
-          };
-        });
+    try {
+      const text = await f.text();
+      const parsedRows = await parseCsv(text);
+      
+      console.log("Parsed CSV rows:", parsedRows.slice(0, 3)); // Debug: show first 3 rows
+      
+      const preview: PreviewRow[] = parsedRows.map((row, index) => ({
+        ...row,
+        _raw: { artist: row.artist, streams: row.streams, week: row.week }
+      }));
 
-        setRows(preview);
-        setInfo({
-          total: preview.length,
-          included: preview.length,
-          excluded: 0,
-        });
-        setLoading(false);
-      },
-      error: (err) => {
-        setLoading(false);
-        setError(err?.message || "Failed to parse CSV");
-      },
-    });
+      setRows(preview);
+      setInfo({
+        total: preview.length,
+        included: preview.length,
+        excluded: 0,
+      });
+      setLoading(false);
+    } catch (err: any) {
+      setLoading(false);
+      setError(err?.message || "Failed to parse CSV");
+      console.error("CSV parse error:", err);
+    }
   }
 
   function toggleExclude(ix: number) {
@@ -229,7 +117,7 @@ export default function UploadPage() {
     <div className="max-w-6xl mx-auto px-4 py-6">
       <h1 className="h1 mb-6">Import weekly CSV</h1>
       <p className="text-zinc-400 mb-4">
-        We auto-detect common Music Connect headers. If your CSV has no date column, set a Week Start.
+        We auto-detect Music Connect exports and skip title rows. If your CSV has no date column, set a Week Start.
       </p>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -272,21 +160,15 @@ export default function UploadPage() {
         Rows in file: <b>{info.total}</b> · Included: <b>{info.included}</b> · Excluded: <b>{info.excluded}</b>
       </div>
 
-      {/* Debug info - show detected headers */}
+      {/* Debug info - show parsing results */}
       {rows.length > 0 && (
         <div className="mb-3 rounded border border-zinc-700 bg-zinc-800/40 px-3 py-2 text-xs">
-          <div className="font-medium text-zinc-300 mb-1">Detected Headers:</div>
+          <div className="font-medium text-zinc-300 mb-1">Parsing Results:</div>
           <div className="text-zinc-400">
-            <div>Available columns: {Object.keys(rows[0]?._raw || {}).join(", ")}</div>
-            <div>Artist detected from: {rows[0]?._raw ? Object.keys(rows[0]._raw).find(k => 
-              ARTIST_HEADERS.some(h => norm(h) === norm(k))
-            ) || "none" : "none"}</div>
-            <div>Streams detected from: {rows[0]?._raw ? Object.keys(rows[0]._raw).find(k => 
-              STREAMS_HEADERS.some(h => norm(h) === norm(k))
-            ) || "none" : "none"}</div>
-            <div>Date detected from: {rows[0]?._raw ? Object.keys(rows[0]._raw).find(k => 
-              DATE_HEADERS.some(h => norm(h) === norm(k))
-            ) || "none" : "none"}</div>
+            <div>Total rows parsed: {rows.length}</div>
+            <div>Rows with dates: {rows.filter(r => r.week).length}</div>
+            <div>Rows without dates: {rows.filter(r => !r.week).length}</div>
+            <div>Sample row: {rows[0] ? `${rows[0].artist} - ${rows[0].streams.toLocaleString()} streams` : 'none'}</div>
           </div>
         </div>
       )}
@@ -327,8 +209,8 @@ export default function UploadPage() {
                         {isEx ? "↩" : "✖"}
                       </button>
                     </td>
-                    <td className="px-3 py-2">{r.artist ?? "—"}</td>
-                    <td className="px-3 py-2">{r.streams != null ? r.streams.toLocaleString() : "—"}</td>
+                    <td className="px-3 py-2">{r.artist || "—"}</td>
+                    <td className="px-3 py-2">{r.streams.toLocaleString()}</td>
                     <td className="px-3 py-2">{r.week ?? (weekStart ? `(will use ${weekStart})` : "—")}</td>
                   </tr>
                 );

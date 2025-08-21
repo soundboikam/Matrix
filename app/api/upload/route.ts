@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     const dataType: "US" | "Global" =
       body?.dataType === "Global" ? "Global" : "US";
     const clientWeekStart: string | null = body?.weekStart || null;
-    const rows: Array<{ artist?: string; streams?: number | null; week?: string | null }> =
+    const rows: Array<{ artist: string; streams: number; week?: string }> =
       Array.isArray(body?.rows) ? body.rows : [];
 
     if (!rows.length) {
@@ -49,11 +49,9 @@ export async function POST(req: Request) {
       const name = (r.artist || "").trim();
       if (!name) { skipped++; continue; }
 
-      // Coerce streams
-      const streams =
-        typeof r.streams === "number" && Number.isFinite(r.streams)
-          ? r.streams
-          : null;
+      // Validate streams
+      const streams = typeof r.streams === "number" && Number.isFinite(r.streams) ? r.streams : 0;
+      if (streams <= 0) { skipped++; continue; }
 
       // Use file week if present; else fall back to client weekStart
       let weekStartISO: string | null = null;
@@ -88,13 +86,13 @@ export async function POST(req: Request) {
           },
         },
         update: {
-          streams: streams ?? 0,
+          streams,
           region: dataType,
         },
         create: {
           artistId: artistRec.id,
           weekStart: new Date(weekStartISO),
-          streams: streams ?? 0,
+          streams,
           source: "upload",
           region: dataType,
         },
