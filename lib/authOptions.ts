@@ -6,6 +6,14 @@ import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
+// Define the custom user type that includes username
+interface CustomUser {
+  id: string;
+  username: string;
+  email?: string | null;
+  name?: string | null;
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
@@ -16,61 +24,45 @@ export const authOptions: NextAuthOptions = {
       async authorize(creds) {
         if (!creds?.username || !creds.password) return null;
         
-        console.log(`=== Auth Debug: Attempting login for user "${creds.username}" ===`);
-        
         // Search by username since we created the user with username field
         const user = await prisma.user.findUnique({ where: { username: creds.username } });
         
-        if (!user) {
-          console.log(`❌ User "${creds.username}" not found in database`);
-          return null;
-        }
-        
-        console.log(`✅ User "${creds.username}" found:`, {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          name: user.name,
-          hasPasswordHash: !!user.passwordHash
-        });
+        if (!user) return null;
         
         const ok = await bcrypt.compare(creds.password, user.passwordHash);
-        console.log(`🔐 Password verification: ${ok ? '✅ SUCCESS' : '❌ FAILED'}`);
+        if (!ok) return null;
         
-        if (ok) {
-          const userObject = { 
-            id: user.id, 
-            username: user.username,
-            email: user.email, 
-            name: user.name ?? null 
-          };
-          console.log(`✅ Returning user object:`, userObject);
-          return userObject;
-        } else {
-          console.log(`❌ Password verification failed for user "${creds.username}"`);
-          return null;
-        }
+        // Return user object with all necessary fields
+        return { 
+          id: user.id, 
+          username: user.username,
+          email: user.email, 
+          name: user.name ?? null 
+        };
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) { 
       if (user) {
-        (token as any).userId = user.id;
-        (token as any).username = (user as any).username;
-        (token as any).email = user.email;
-        (token as any).name = user.name;
+        // Cast user to our custom type and ensure all fields are set
+        const customUser = user as CustomUser;
+        token.userId = customUser.id;
+        token.username = customUser.username;
+        token.email = customUser.email;
+        token.name = customUser.name;
       }
       return token; 
     },
     async session({ session, token }) { 
-      if ((token as any)?.userId) {
+      if (token?.userId) {
+        // Ensure all user fields are properly set in the session
         (session.user as any) = {
           ...session.user,
-          id: (token as any).userId,
-          username: (token as any).username,
-          email: (token as any).email,
-          name: (token as any).name
+          id: token.userId,
+          username: token.username,
+          email: token.email,
+          name: token.name
         };
       }
       return session; 
