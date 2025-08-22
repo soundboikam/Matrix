@@ -1,37 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
-import { signIn, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
-  const { data: session, status } = useSession();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  
-  // Redirect if already logged in
-  useEffect(() => {
-    if (status === "loading") return;
-    if (session) {
-      router.push("/dashboard");
-    }
-  }, [session, status, router]);
-
-  // Show loading while checking session
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-white text-black flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
-      </div>
-    );
-  }
-
-  // Don't render form if already logged in
-  if (session) {
-    return null;
-  }
   
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,15 +15,15 @@ export default function LoginPage() {
     
     try {
       const res = await signIn("credentials", { 
-        redirect: false, 
         username, 
-        password 
+        password,
+        redirect: true,
+        callbackUrl: "/dashboard"
       });
       
-      if (res?.ok) {
-        router.push("/dashboard");
-      } else {
-        setError(`Login failed: ${res?.error || "Invalid username or password"}`);
+      // If we get here, there was an error
+      if (res?.error) {
+        setError(`Login failed: ${res.error}`);
       }
     } catch (error) {
       setError("An error occurred during login");
