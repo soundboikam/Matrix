@@ -44,6 +44,10 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) { 
+      console.log('=== JWT Callback Debug ===');
+      console.log('User object:', user);
+      console.log('Token before:', token);
+      
       if (user) {
         // Cast user to our custom type and ensure all fields are set
         const customUser = user as CustomUser;
@@ -51,10 +55,20 @@ export const authOptions: NextAuthOptions = {
         (token as any).username = customUser.username;
         (token as any).email = customUser.email;
         (token as any).name = customUser.name;
+        
+        console.log('Token after:', token);
+        console.log('User ID in token:', (token as any).userId);
+      } else {
+        console.log('❌ No user object in JWT callback!');
       }
+      
       return token; 
     },
     async session({ session, token }) { 
+      console.log('=== Session Callback Debug ===');
+      console.log('Token:', token);
+      console.log('Session before:', session);
+      
       if ((token as any)?.userId) {
         // Ensure all user fields are properly set in the session
         (session.user as any) = {
@@ -64,7 +78,13 @@ export const authOptions: NextAuthOptions = {
           email: (token as any).email,
           name: (token as any).name
         };
+        
+        console.log('Session after:', session);
+        console.log('User ID in session:', (session.user as any).id);
+      } else {
+        console.log('❌ No userId in token!');
       }
+      
       return session; 
     },
   },
