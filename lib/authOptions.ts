@@ -47,22 +47,22 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         // Cast user to our custom type and ensure all fields are set
         const customUser = user as CustomUser;
-        token.userId = customUser.id;
-        token.username = customUser.username;
-        token.email = customUser.email;
-        token.name = customUser.name;
+        (token as any).userId = customUser.id;
+        (token as any).username = customUser.username;
+        (token as any).email = customUser.email;
+        (token as any).name = customUser.name;
       }
       return token; 
     },
     async session({ session, token }) { 
-      if (token?.userId) {
+      if ((token as any)?.userId) {
         // Ensure all user fields are properly set in the session
         (session.user as any) = {
           ...session.user,
-          id: token.userId,
-          username: token.username,
-          email: token.email,
-          name: token.name
+          id: (token as any).userId,
+          username: (token as any).username,
+          email: (token as any).email,
+          name: (token as any).name
         };
       }
       return session; 
