@@ -22,16 +22,23 @@ export default function LoginPage() {
       const res = await signIn("credentials", { 
         username, 
         password,
-        redirect: true, // Use NextAuth's built-in redirect
-        callbackUrl: "/dashboard" // Redirect directly to dashboard
+        redirect: false, // Temporarily disable redirect to see full flow
+        callbackUrl: "/dashboard" // Keep this for when we re-enable redirect
       });
       
       console.log('signIn result:', res);
       
-      // If we get here, there was an error (NextAuth handles successful redirect)
+      // Check the response and handle accordingly
       if (res?.error) {
         console.log('❌ SignIn error:', res.error);
         setError(`Login failed: ${res.error}`);
+      } else if (res?.ok) {
+        console.log('✅ SignIn successful, redirecting to dashboard...');
+        // Manual redirect to dashboard
+        window.location.href = '/dashboard';
+      } else {
+        console.log('⚠️ SignIn response:', res);
+        setError('Unexpected response from authentication');
       }
     } catch (error) {
       console.log('❌ Exception during signIn:', error);
