@@ -20,13 +20,23 @@ export async function POST(req: NextRequest) {
     
     console.log("No users found. Creating initial setup...");
     
+    // Get setup data from request body
+    const body = await req.json();
+    const { username, email, name, password } = body;
+    
+    if (!username || !password) {
+      return NextResponse.json({ 
+        error: "Username and password required in request body" 
+      }, { status: 400 });
+    }
+    
     // Create the user
-    const passwordHash = await bcrypt.hash("kamilek", 10);
+    const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
-        username: "kam", // Add username since it's required in schema
-        email: "kam@matrix.local",
-        name: "Kam",
+        username,
+        email: email || null,
+        name: name || null,
         passwordHash: passwordHash,
       }
     });
@@ -58,16 +68,13 @@ export async function POST(req: NextRequest) {
       message: "Setup completed successfully",
       user: {
         id: user.id,
+        username: user.username,
         email: user.email,
         name: user.name,
       },
       workspace: {
         id: workspace.id,
         name: workspace.name,
-      },
-      loginCredentials: {
-        email: "kam@matrix.local",
-        password: "kamilek",
       }
     });
     

@@ -28,6 +28,16 @@
     <div class="step">
         <h3>Step 2: Create User Account</h3>
         <p>This will create your login account and workspace.</p>
+        <div style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+            <label style="display: block; margin-bottom: 5px;"><strong>Username:</strong></label>
+            <input type="text" id="setupUsername" placeholder="Enter username" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 5px;"><strong>Password:</strong></label>
+            <input type="password" id="setupPassword" placeholder="Enter password" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 5px;"><strong>Email (optional):</strong></label>
+            <input type="email" id="setupEmail" placeholder="Enter email (optional)" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 5px;"><strong>Full Name (optional):</strong></label>
+            <input type="text" id="setupName" placeholder="Enter full name (optional)" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px;">
+        </div>
         <button class="button" onclick="setupUser()" id="setupUserBtn" disabled>Create User Account</button>
         <div id="userResult"></div>
     </div>
@@ -36,7 +46,7 @@
         <h3>Step 3: Test Login</h3>
         <p>After completing steps 1 & 2, try logging in at:</p>
         <a href="https://matrix-gray.vercel.app/login" target="_blank">https://matrix-gray.vercel.app/login</a>
-        <p><strong>Email:</strong> kam@matrix.local<br><strong>Password:</strong> kamilek</p>
+        <p><strong>Use the credentials you provided in Step 2</strong></p>
     </div>
 
     <script>
@@ -76,12 +86,26 @@
             const button = event.target;
             const resultDiv = document.getElementById('userResult');
             
+            const username = document.getElementById('setupUsername').value.trim();
+            const password = document.getElementById('setupPassword').value.trim();
+            const email = document.getElementById('setupEmail').value.trim();
+            const name = document.getElementById('setupName').value.trim();
+            
+            if (!username || !password) {
+                resultDiv.innerHTML = '<div class="result error">❌ Username and password are required</div>';
+                return;
+            }
+            
             button.disabled = true;
             button.textContent = 'Creating user...';
             resultDiv.innerHTML = '⏳ Creating user account...';
             
             try {
-                const response = await fetch('/api/setup', { method: 'POST' });
+                const response = await fetch('/api/setup', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, email, name })
+                });
                 const data = await response.json();
                 
                 if (data.success) {

@@ -91,8 +91,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { username, name, email, password, workspaceId, role } = body;
 
-    if (!username || !name || !password) {
-      return NextResponse.json({ error: "Username, name, and password required" }, { status: 400 });
+    if (!username || !password) {
+      return NextResponse.json({ error: "Username and password required" }, { status: 400 });
     }
 
     // Validate role

@@ -180,13 +180,12 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2 text-zinc-300">Full Name</label>
+                <label className="block text-sm font-medium mb-2 text-zinc-300">Full Name (Optional)</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full p-3 border border-zinc-700 rounded bg-zinc-900 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                  required
                 />
               </div>
             </div>

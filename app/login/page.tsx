@@ -4,21 +4,36 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("kam");
-  const [password, setPassword] = useState("kamilek");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const router = useRouter();
+  
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const res = await signIn("credentials", { redirect: false, username, password });
     if (res?.ok) router.push("/dashboard"); else setError("Invalid login");
   }
+  
   return (
     <div className="min-h-screen bg-white text-black flex items-center justify-center">
       <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4 border p-6 rounded">
         <h1 className="text-2xl font-semibold">Matrix Sign In</h1>
-        <input className="w-full border p-2 rounded" value={username} onChange={e=>setUsername(e.target.value)} placeholder="Username" /> 
-        <input className="w-full border p-2 rounded" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" />
+        <input 
+          className="w-full border p-2 rounded" 
+          value={username} 
+          onChange={e=>setUsername(e.target.value)} 
+          placeholder="Username" 
+          required
+        /> 
+        <input 
+          className="w-full border p-2 rounded" 
+          type="password" 
+          value={password} 
+          onChange={e=>setPassword(e.target.value)} 
+          placeholder="Password" 
+          required
+        />
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button className="w-full border p-2 rounded hover:bg-black hover:text-white">Sign In</button>
       </form>
