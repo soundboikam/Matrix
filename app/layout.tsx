@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import Providers from "../components/Providers";
 
 export const metadata: Metadata = {
   title: "Matrix",
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="theme-bw">{children}</body>
+      <body className="theme-bw">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
