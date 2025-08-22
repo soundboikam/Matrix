@@ -13,7 +13,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/login");
   }
 
-  const email = session?.user?.email || "";
+  // Check if user has any workspace memberships
+  if (!(session.user as any)?.id) {
+    redirect("/login");
+  }
 
   return (
     <html lang="en">

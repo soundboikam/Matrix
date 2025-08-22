@@ -31,8 +31,27 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) { if (user) (token as any).userId = (user as any).id; return token; },
-    async session({ session, token }) { if ((token as any)?.userId) (session as any).user = { ...(session.user||{}), id: (token as any).userId }; return session; },
+    async jwt({ token, user }) { 
+      if (user) {
+        (token as any).userId = user.id;
+        (token as any).username = (user as any).username;
+        (token as any).email = user.email;
+        (token as any).name = user.name;
+      }
+      return token; 
+    },
+    async session({ session, token }) { 
+      if ((token as any)?.userId) {
+        (session.user as any) = {
+          ...session.user,
+          id: (token as any).userId,
+          username: (token as any).username,
+          email: (token as any).email,
+          name: (token as any).name
+        };
+      }
+      return session; 
+    },
   },
   secret: process.env.NEXTAUTH_SECRET,
 };

@@ -15,7 +15,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (status === "loading") return;
     if (session) {
-      router.push("/dashboard");
+      router.push("/");
     }
   }, [session, status, router]);
 
@@ -46,9 +46,9 @@ export default function LoginPage() {
       });
       
       if (res?.ok) {
-        router.push("/dashboard");
+        router.push("/");
       } else {
-        setError("Invalid username or password");
+        setError(`Login failed: ${res?.error || "Invalid username or password"}`);
       }
     } catch (error) {
       setError("An error occurred during login");
