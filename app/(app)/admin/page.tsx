@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 type User = {
   id: string;
@@ -24,6 +25,7 @@ type Workspace = {
 };
 
 export default function AdminPage() {
+  const { data: session, status } = useSession();
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -35,15 +37,11 @@ export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeTab, setActiveTab] = useState<"create" | "manage">("create");
+  const [isAdmin, setIsAdmin] = useState(false);
   const router = useRouter();
 
   // Fetch existing users and workspaces
-  useEffect(() => {
-    fetchUsers();
-    fetchWorkspaces();
-  }, []);
-
-  async function fetchUsers() {
+  const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/users");
       if (res.ok) {
@@ -53,9 +51,9 @@ export default function AdminPage() {
     } catch (error) {
       console.error("Failed to fetch users:", error);
     }
-  }
+  }, []);
 
-  async function fetchWorkspaces() {
+  const fetchWorkspaces = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/workspaces");
       if (res.ok) {
@@ -68,7 +66,37 @@ export default function AdminPage() {
     } catch (error) {
       console.error("Failed to fetch workspaces:", error);
     }
-  }
+  }, []);
+
+  // Check authentication and admin status
+  useEffect(() => {
+    if (status === "loading") return;
+    
+    if (!session) {
+      router.push("/login");
+      return;
+    }
+
+    // Check if user is admin
+    const checkAdminStatus = async () => {
+      try {
+        const res = await fetch("/api/admin/workspaces");
+        if (res.ok) {
+          setIsAdmin(true);
+          fetchUsers();
+          fetchWorkspaces();
+        } else {
+          // Not admin, redirect to dashboard
+          router.push("/");
+        }
+      } catch (error) {
+        console.error("Failed to check admin status:", error);
+        router.push("/");
+      }
+    };
+
+    checkAdminStatus();
+  }, [session, status, router, fetchUsers, fetchWorkspaces]);
 
   async function createUser(e: React.FormEvent) {
     e.preventDefault();
@@ -129,6 +157,17 @@ export default function AdminPage() {
     } catch (error) {
       setMessage("Failed to delete user");
     }
+  }
+
+  // Show loading while checking auth
+  if (status === "loading" || !isAdmin) {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="text-center py-12">
+          <div className="text-xl">Loading...</div>
+        </div>
+      </div>
+    );
   }
 
   return (

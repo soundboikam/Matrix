@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { useState, useEffect } from "react";
 import LogoMatrix from "./LogoMatrix";
 import LogoutButton from "./LogoutButton";
 
@@ -16,7 +18,27 @@ const links = [
 
 export default function Nav() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const [isAdmin, setIsAdmin] = useState(false);
   const defaultDataType = process.env.NEXT_PUBLIC_DEFAULT_DATA_TYPE || "US";
+
+  // Check if user is admin
+  useEffect(() => {
+    if (session) {
+      checkAdminStatus();
+    }
+  }, [session]);
+
+  async function checkAdminStatus() {
+    try {
+      const res = await fetch("/api/admin/workspaces");
+      if (res.ok) {
+        setIsAdmin(true);
+      }
+    } catch (error) {
+      // User is not admin
+    }
+  }
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-zinc-800 bg-black/70 backdrop-blur">
@@ -48,6 +70,18 @@ export default function Nav() {
               </Link>
             );
           })}
+          
+          {/* Admin link - only show for admin users */}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className={`transition-colors ${
+                pathname === "/admin" ? "text-white" : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Admin
+            </Link>
+          )}
         </nav>
 
         {/* Right side: Data badge and Logout button */}
