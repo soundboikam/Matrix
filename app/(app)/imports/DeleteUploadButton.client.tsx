@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { invalidateStats } from "../../../components/StatsCards";
 
 export default function DeleteUploadButton({ uploadId }: { uploadId: string }) {
   const [busy, setBusy] = useState(false);
@@ -17,6 +18,8 @@ export default function DeleteUploadButton({ uploadId }: { uploadId: string }) {
       if (!res.ok) throw new Error(await res.text());
       // Re-fetch the server component table after deletion
       router.refresh();
+      // Invalidate stats to update the dashboard cards
+      invalidateStats();
     } catch (e: any) {
       setErr(e?.message || "Failed to delete");
     } finally {
