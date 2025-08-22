@@ -10,22 +10,31 @@ export default function LoginPage() {
   
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    console.log('=== Login Form Submitted ===');
+    console.log('Username:', username);
+    console.log('Password:', password ? '[REDACTED]' : 'missing');
+    
     setLoading(true);
     setError("");
     
     try {
+      console.log('Calling signIn...');
       const res = await signIn("credentials", { 
         username, 
         password,
-        redirect: true,
-        callbackUrl: "/dashboard"
+        redirect: true, // Use NextAuth's built-in redirect
+        callbackUrl: "/dashboard" // Redirect directly to dashboard
       });
       
-      // If we get here, there was an error
+      console.log('signIn result:', res);
+      
+      // If we get here, there was an error (NextAuth handles successful redirect)
       if (res?.error) {
+        console.log('❌ SignIn error:', res.error);
         setError(`Login failed: ${res.error}`);
       }
     } catch (error) {
+      console.log('❌ Exception during signIn:', error);
       setError("An error occurred during login");
     } finally {
       setLoading(false);

@@ -22,23 +22,40 @@ export const authOptions: NextAuthOptions = {
       name: "Credentials",
       credentials: { username: { label: "Username", type: "text" }, password: { label: "Password", type: "password" } },
       async authorize(creds) {
-        if (!creds?.username || !creds.password) return null;
+        console.log('=== Authorize Function Called ===');
+        console.log('Credentials received:', { username: creds?.username, password: creds?.password ? '[REDACTED]' : 'missing' });
+        
+        if (!creds?.username || !creds.password) {
+          console.log('❌ Missing credentials');
+          return null;
+        }
         
         // Search by username since we created the user with username field
         const user = await prisma.user.findUnique({ where: { username: creds.username } });
+        console.log('User found:', user ? { id: user.id, username: user.username, hasPassword: !!user.passwordHash } : 'NOT FOUND');
         
-        if (!user) return null;
+        if (!user) {
+          console.log('❌ User not found');
+          return null;
+        }
         
         const ok = await bcrypt.compare(creds.password, user.passwordHash);
-        if (!ok) return null;
+        console.log('Password comparison result:', ok);
+        
+        if (!ok) {
+          console.log('❌ Password incorrect');
+          return null;
+        }
         
         // Return user object with all necessary fields
-        return { 
+        const userToReturn = { 
           id: user.id, 
           username: user.username,
           email: user.email, 
           name: user.name ?? null 
         };
+        console.log('✅ Returning user:', userToReturn);
+        return userToReturn;
       },
     }),
   ],
