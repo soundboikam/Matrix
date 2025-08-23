@@ -16,6 +16,12 @@ interface CustomUser {
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
+  
+  // Make sure we trust the deployed host (Vercel)
+  // (Auth.js v5 uses `trustHost`; v4 ignores it, safe either way.)
+  // @ts-expect-error - if on v4 this is harmless
+  trustHost: true,
+  
   session: { 
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -118,6 +124,23 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
+  
+  cookies: {
+    // Let NextAuth pick the right cookie names in production (__Secure-*)
+    // Avoid hard-coding cookie.domain unless you truly need a shared subdomain cookie.
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.session-token"
+          : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
+  },
 };
 
 

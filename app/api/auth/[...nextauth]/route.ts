@@ -1,6 +1,9 @@
 import NextAuth from "next-auth";
 import { authOptions } from "../../../../lib/authOptions";
 
+export const runtime = "nodejs";            // IMPORTANT: Prisma needs Node runtime
+export const dynamic = "force-dynamic";     // Ensure this route is never cached/statized
+
 console.log("=== NextAuth Route Initialization ===");
 console.log("AuthOptions:", !!authOptions);
 console.log("NextAuth import:", !!NextAuth);
