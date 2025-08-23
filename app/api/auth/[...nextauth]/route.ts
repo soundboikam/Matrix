@@ -1,22 +1,26 @@
 import NextAuth from "next-auth";
 import { authOptions } from "../../../../lib/authOptions";
 
-export const runtime = "nodejs";            // IMPORTANT: Prisma needs Node runtime
-export const dynamic = "force-dynamic";     // Ensure this route is never cached/statized
+// Force Node runtime (Prisma needs Node, not Edge)
+export const runtime = "nodejs";
+// Prevent static optimization/caching
+export const dynamic = "force-dynamic";
 
-console.log("=== NextAuth Route Initialization ===");
-console.log("AuthOptions:", !!authOptions);
-console.log("NextAuth import:", !!NextAuth);
+const handler = NextAuth(authOptions);
 
-let handler;
-try {
-  handler = NextAuth(authOptions);
-  console.log("NextAuth handler created successfully");
-} catch (error) {
-  console.error("Error creating NextAuth handler:", error);
-  throw error;
+// Optional: tiny wrapper to log unexpected errors
+function withErrorLogging(fn: any) {
+  return async (req: Request, ctx: any) => {
+    try {
+      return await fn(req, ctx);
+    } catch (err) {
+      console.error("[NextAuth Route Error]", err);
+      throw err;
+    }
+  };
 }
 
-export { handler as GET, handler as POST };
+export const GET = withErrorLogging(handler);
+export const POST = withErrorLogging(handler);
 
 

@@ -17,117 +17,118 @@ interface CustomUser {
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   
-  // Make sure we trust the deployed host (Vercel)
-  // (Auth.js v5 uses `trustHost`; v4 ignores it, safe either way.)
-  // @ts-expect-error - if on v4 this is harmless
+  // (Auth.js v5 uses trustHost; harmless on v4)
+  // @ts-expect-error
   trustHost: true,
   
-  session: { 
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours
+  session: {
+    strategy: "jwt", // or "database" if you explicitly need DB sessions
   },
-  jwt: {
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
+  
   pages: {
     signIn: '/login',
     error: '/login',
   },
+  
   providers: [
     Credentials({
       name: "Credentials",
       credentials: { username: { label: "Username", type: "text" }, password: { label: "Password", type: "password" } },
       async authorize(creds) {
-        console.log('=== Authorize Function Called ===');
-        console.log('Credentials received:', { username: creds?.username, password: creds?.password ? '[REDACTED]' : 'missing' });
-        
-        if (!creds?.username || !creds.password) {
-          console.log('❌ Missing credentials');
-          return null;
+        try {
+          console.log('=== Authorize Function Called ===');
+          console.log('Credentials received:', { username: creds?.username, password: creds?.password ? '[REDACTED]' : 'missing' });
+          
+          if (!creds?.username || !creds.password) {
+            console.log('❌ Missing credentials');
+            return null;
+          }
+          
+          // Search by username since we created the user with username field
+          const user = await prisma.user.findUnique({ where: { username: creds.username } });
+          console.log('User found:', user ? { id: user.id, username: user.username, hasPassword: !!user.passwordHash } : 'NOT FOUND');
+          
+          if (!user) {
+            console.log('❌ User not found');
+            return null;
+          }
+          
+          const ok = await bcrypt.compare(creds.password, user.passwordHash);
+          console.log('Password comparison result:', ok);
+          
+          if (!ok) {
+            console.log('❌ Password incorrect');
+            return null;
+          }
+          
+          // Return user object with all necessary fields
+          const userToReturn = { 
+            id: user.id, 
+            username: user.username,
+            email: user.email, 
+            name: user.name ?? null 
+          };
+          console.log('✅ Returning user:', userToReturn);
+          return userToReturn;
+        } catch (err) {
+          console.error("[NextAuth authorize error]", err);
+          return null; // never throw
         }
-        
-        // Search by username since we created the user with username field
-        const user = await prisma.user.findUnique({ where: { username: creds.username } });
-        console.log('User found:', user ? { id: user.id, username: user.username, hasPassword: !!user.passwordHash } : 'NOT FOUND');
-        
-        if (!user) {
-          console.log('❌ User not found');
-          return null;
-        }
-        
-        const ok = await bcrypt.compare(creds.password, user.passwordHash);
-        console.log('Password comparison result:', ok);
-        
-        if (!ok) {
-          console.log('❌ Password incorrect');
-          return null;
-        }
-        
-        // Return user object with all necessary fields
-        const userToReturn = { 
-          id: user.id, 
-          username: user.username,
-          email: user.email, 
-          name: user.name ?? null 
-        };
-        console.log('✅ Returning user:', userToReturn);
-        return userToReturn;
       },
     }),
   ],
+  
   callbacks: {
-    async jwt({ token, user }) { 
-      console.log('=== JWT Callback Debug ===');
-      console.log('User object:', user);
-      console.log('Token before:', token);
-      
-      if (user) {
-        // Cast user to our custom type and ensure all fields are set
-        const customUser = user as CustomUser;
-        (token as any).userId = customUser.id;
-        (token as any).username = customUser.username;
-        (token as any).email = customUser.email;
-        (token as any).name = customUser.name;
-        
-        console.log('Token after:', token);
-        console.log('User ID in token:', (token as any).userId);
-      } else {
-        console.log('❌ No user object in JWT callback!');
+    async jwt({ token, user }) {
+      try {
+        if (user) {
+          token.sub = (user as any).id ?? token.sub ?? null;
+          // If you store role/permissions, copy them only if present
+          (token as any).role = (user as any).role ?? (token as any).role ?? null;
+          (token as any).username =
+            (user as any).username ?? (token as any).username ?? null;
+          (token as any).email = (user as any).email ?? (token as any).email ?? null;
+          (token as any).name = (user as any).name ?? (token as any).name ?? null;
+        }
+        return token;
+      } catch (err) {
+        console.error("[NextAuth jwt callback error]", err);
+        return token; // never throw
       }
-      
-      return token; 
     },
-    async session({ session, token }) { 
-      console.log('=== Session Callback Debug ===');
-      console.log('Token:', token);
-      console.log('Session before:', session);
-      
-      if ((token as any)?.userId) {
-        // Ensure all user fields are properly set in the session
-        (session.user as any) = {
-          ...session.user,
-          id: (token as any).userId,
-          username: (token as any).username,
-          email: (token as any).email,
-          name: (token as any).name
-        };
-        
-        console.log('Session after:', session);
-        console.log('User ID in session:', (session.user as any).id);
-      } else {
-        console.log('❌ No userId in token!');
+
+    async session({ session, token }) {
+      try {
+        if (session.user) {
+          (session.user as any).id = token.sub ?? null;
+          (session.user as any).role = (token as any).role ?? null;
+          (session.user as any).username = (token as any).username ?? null;
+          (session.user as any).email = (token as any).email ?? null;
+          (session.user as any).name = (token as any).name ?? null;
+        }
+        return session;
+      } catch (err) {
+        console.error("[NextAuth session callback error]", err);
+        return session; // never throw
       }
-      
-      return session; 
+    },
+
+    async signIn(params) {
+      try {
+        // If you validate anything here (e.g., require workspace), handle the "missing" case gracefully.
+        return true;
+      } catch (err) {
+        console.error("[NextAuth signIn callback error]", err);
+        return false;
+      }
     },
   },
+  
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
   
   cookies: {
-    // Let NextAuth pick the right cookie names in production (__Secure-*)
-    // Avoid hard-coding cookie.domain unless you truly need a shared subdomain cookie.
+    // Let NextAuth set secure cookies in prod; avoid custom domain
     sessionToken: {
       name:
         process.env.NODE_ENV === "production"
