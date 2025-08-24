@@ -51,35 +51,57 @@ export default function ImportPage() {
     Papa.parse(f, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (h) => {
+      // Handle duplicate headers better
+      transformHeader: (h, index) => {
+        // Log the original header and its index
+        console.log(`Header ${index}: "${h}"`);
+        
+        // Handle duplicate headers by keeping the first occurrence
         const normalized = norm(h);
         console.log(`Header transform: "${h}" -> "${normalized}"`);
         return normalized;
+      },
+      // Add error handling
+      error: (error) => {
+        console.error('Papa Parse error:', error);
       },
       complete: (res) => {
         console.log('=== CSV Parse Complete ===');
         console.log('Raw result:', res);
         console.log('Data:', res.data);
+        console.log('Meta:', res.meta);
         
         const raw: Record<string, any>[] = (res.data as any[]) ?? [];
         console.log('Raw rows:', raw);
         console.log('First row keys:', raw[0] ? Object.keys(raw[0]) : 'No rows');
         
+        // Show all available columns for debugging
+        if (raw.length > 0) {
+          console.log('=== ALL AVAILABLE COLUMNS ===');
+          Object.keys(raw[0]).forEach((key, index) => {
+            console.log(`Column ${index}: "${key}" -> value: "${raw[0][key]}"`);
+          });
+        }
+        
         const mapped: PreviewRow[] = raw.map((r, index) => {
           console.log(`\n--- Processing row ${index} ---`);
           console.log('Row data:', r);
           
-          // tolerant column picks
+          // More flexible column detection - try multiple patterns
           const artist = pick(r, [
             "artist",
             "artist_name", 
             "name",
             "artistname",
             "recording_artist",
+            "artist_1", // Handle renamed duplicates
+            "artist_2",
+            "artist_name_1",
+            "artist_name_2",
           ]);
           console.log(`Artist result:`, artist);
 
-          // streams can be "streams", "this_week", "units", etc.
+          // More flexible streams detection
           let streams = pick(r, [
             "streams",
             "this_week",
@@ -87,6 +109,10 @@ export default function ImportPage() {
             "weekly_streams",
             "units",
             "total_streams",
+            "streams_1", // Handle renamed duplicates
+            "streams_2",
+            "this_week_1",
+            "this_week_2",
           ]);
           console.log(`Streams result:`, streams);
 
@@ -101,7 +127,17 @@ export default function ImportPage() {
 
           const week =
             weekStart ||
-            pick(r, ["week", "week_start", "week_of", "date", "week_start_date"]);
+            pick(r, [
+              "week", 
+              "week_start", 
+              "week_of", 
+              "date", 
+              "week_start_date",
+              "week_1", // Handle renamed duplicates
+              "week_2",
+              "date_1",
+              "date_2",
+            ]);
           console.log(`Week result:`, week);
 
           const result = { artist: artist?.toString() ?? "", streams, week };
