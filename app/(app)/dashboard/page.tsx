@@ -1,26 +1,9 @@
-import { PrismaClient } from "@prisma/client";
-import { requireAuth } from "../../../lib/auth";
 import StarredGrid from "../../../components/StarredGrid";
 import StatsCards from "../../../components/StatsCards";
 import Link from "next/link";
 
-const prisma = new PrismaClient();
-
 export default async function DashboardPage() {
-  const session = await requireAuth();
-  const userId = (session as any).user?.id as string;
-
-  const membership = await prisma.membership.findFirst({ where: { userId } });
-  const workspaceId = membership?.workspaceId ?? "";
-
-  // latest 15 stars for the Watchlist box (simple table)
-  const latestStars = await prisma.watchlist.findMany({
-    where: { userId },
-    orderBy: { starredAt: "desc" },
-    take: 15,
-    include: { artist: true },
-  });
-
+  // Remove server-side auth check - let client-side handle it
   return (
     <>
       <StatsCards />
@@ -42,32 +25,11 @@ export default async function DashboardPage() {
           </Link>
         </div>
         <div className="border-t border-neutral-800">
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th>Artist</th>
-                <th className="text-right">Starred</th>
-              </tr>
-            </thead>
-            <tbody>
-              {latestStars.map((w) => (
-                <tr key={w.id}>
-                  <td>{w.artist.name}</td>
-                  <td className="text-right">{w.starredAt.toISOString().slice(0, 10)}</td>
-                </tr>
-              ))}
-              {latestStars.length === 0 && (
-                <tr>
-                  <td colSpan={2} className="p-6 text-center text-sm text-neutral-400">
-                    No watchlist yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <div className="p-6 text-center text-sm text-neutral-400">
+            Watchlist data will load here
+          </div>
         </div>
       </section>
     </>
   );
 }
-
