@@ -15,12 +15,24 @@ const norm = (s: string) =>
   s?.toString().toLowerCase().trim().replace(/[\s\-\/]+/g, "_");
 
 const pick = (row: Record<string, any>, candidates: string[]) => {
+  console.log('=== PICK FUNCTION DEBUG ===');
+  console.log('Row keys:', Object.keys(row));
+  console.log('Candidates:', candidates);
+  
   for (const c of candidates) {
     const want = norm(c);
+    console.log(`Looking for normalized: "${want}"`);
+    
     for (const k of Object.keys(row)) {
-      if (norm(k) === want) return row[k];
+      const normalizedKey = norm(k);
+      console.log(`Checking key: "${k}" -> normalized: "${normalizedKey}"`);
+      if (normalizedKey === want) {
+        console.log(`✅ MATCH FOUND: "${k}" -> "${row[k]}"`);
+        return row[k];
+      }
     }
   }
+  console.log('❌ No match found');
   return undefined;
 };
 
@@ -39,28 +51,44 @@ export default function ImportPage() {
     Papa.parse(f, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (h) => norm(h),
+      transformHeader: (h) => {
+        const normalized = norm(h);
+        console.log(`Header transform: "${h}" -> "${normalized}"`);
+        return normalized;
+      },
       complete: (res) => {
+        console.log('=== CSV Parse Complete ===');
+        console.log('Raw result:', res);
+        console.log('Data:', res.data);
+        
         const raw: Record<string, any>[] = (res.data as any[]) ?? [];
-        const mapped: PreviewRow[] = raw.map((r) => {
+        console.log('Raw rows:', raw);
+        console.log('First row keys:', raw[0] ? Object.keys(raw[0]) : 'No rows');
+        
+        const mapped: PreviewRow[] = raw.map((r, index) => {
+          console.log(`\n--- Processing row ${index} ---`);
+          console.log('Row data:', r);
+          
           // tolerant column picks
           const artist = pick(r, [
             "artist",
-            "artist_name",
+            "artist_name", 
             "name",
             "artistname",
             "recording_artist",
           ]);
+          console.log(`Artist result:`, artist);
 
           // streams can be "streams", "this_week", "units", etc.
           let streams = pick(r, [
             "streams",
             "this_week",
-            "thisweek",
+            "thisweek", 
             "weekly_streams",
             "units",
             "total_streams",
           ]);
+          console.log(`Streams result:`, streams);
 
           // coerce to number if possible
           if (streams !== undefined && streams !== null) {
@@ -68,18 +96,25 @@ export default function ImportPage() {
               String(streams).replace(/[, ]+/g, "").replace(/[^\d.-]/g, "")
             );
             streams = Number.isFinite(n) ? n : streams;
+            console.log(`Streams coerced:`, streams);
           }
 
           const week =
             weekStart ||
             pick(r, ["week", "week_start", "week_of", "date", "week_start_date"]);
+          console.log(`Week result:`, week);
 
-          return { artist: artist?.toString() ?? "", streams, week };
+          const result = { artist: artist?.toString() ?? "", streams, week };
+          console.log(`Final result:`, result);
+          return result;
         });
 
+        console.log('Mapped rows:', mapped);
+        
         const trimmed = mapped.filter(
           (r) => r.artist && (r.streams !== undefined || r.week)
         );
+        console.log('Trimmed rows:', trimmed);
 
         setRows(trimmed);
         setMeta({
