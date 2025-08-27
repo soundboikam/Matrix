@@ -9,7 +9,7 @@ async function getSeries(artistId: string) {
     orderBy: { weekStart: "asc" },
     select: { weekStart: true, streams: true },
   });
-  return pts.map(p => ({ x: p.weekStart.toISOString().slice(0,10), y: p.streams }));
+  return pts.map(p => ({ date: p.weekStart.toISOString().slice(0,10), streams: p.streams }));
 }
 
 export default async function ArtistPage({ params }: { params: { id: string } }) {
@@ -19,7 +19,7 @@ export default async function ArtistPage({ params }: { params: { id: string } })
     <div className="space-y-6">
       <h1 className="h1">{artist?.name}</h1>
       <div className="rounded border border-neutral-800 bg-[#0b0b0b] p-4">
-        {points.length ? <ArtistChart points={points} /> : <p className="muted text-sm">No data yet.</p>}
+        {points.length ? <ArtistChart data={points} /> : <p className="muted text-sm">No data yet.</p>}
       </div>
       <div className="panel"><div className="pad">
         <div className="tbl">
@@ -27,7 +27,7 @@ export default async function ArtistPage({ params }: { params: { id: string } })
             <thead><tr><th>Week</th><th className="text-right">Streams</th></tr></thead>
             <tbody>
               {points.map(p=> (
-                <tr key={p.x}><td>{p.x}</td><td className="text-right">{p.y.toLocaleString()}</td></tr>
+                <tr key={p.date}><td>{p.date}</td><td className="text-right">{p.streams.toLocaleString()}</td></tr>
               ))}
             </tbody>
           </table>

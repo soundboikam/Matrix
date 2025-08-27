@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import ArtistChart from "./ArtistChart";
 
 type Point = { weekStart: string; streams: number };
 type SeriesResp = {
@@ -35,12 +36,9 @@ export default function ArtistModal({
         const url = `/api/artist/${artist.id}/series${
           desired ? `?region=${desired}` : ""
         }`;
-        console.log('🔍 ArtistModal: Fetching from URL:', url);
         const res = await fetch(url);
         const data: SeriesResp = await res.json();
-        console.log('🔍 ArtistModal: API Response:', data);
         if (data.error) {
-          console.log('❌ ArtistModal: API returned error:', data.error);
           setPoints([]);
           setAvailableRegions(data.availableRegions || []);
           setRegionUsed(data.regionUsed);
@@ -48,7 +46,6 @@ export default function ArtistModal({
           return;
         }
         
-        console.log('✅ ArtistModal: Setting points:', data.points);
         setPoints(data.points || []);
         setRegionUsed(data.regionUsed);
         setAvailableRegions(data.availableRegions || []);
@@ -64,7 +61,6 @@ export default function ArtistModal({
           }
         }
       } catch (e: any) {
-        console.error('❌ ArtistModal: Fetch error:', e);
         setError(e.message || "Failed");
       } finally {
         setLoading(false);
@@ -142,106 +138,17 @@ export default function ArtistModal({
             <div className="text-zinc-400">No data.</div>
           )}
           {!loading && !error && points.length > 0 && (
-            <MiniLineChart points={points} />
+            <ArtistChart 
+              data={points.map(p => ({
+                date: p.weekStart,
+                streams: p.streams
+              }))} 
+            />
           )}
-          
-          {/* Debug info */}
-          <div className="mt-4 p-3 bg-zinc-800 rounded text-xs">
-            <div>🔍 Debug Info:</div>
-            <div>Loading: {loading.toString()}</div>
-            <div>Error: {error || 'none'}</div>
-            <div>Points count: {points.length}</div>
-            <div>Region: {region}</div>
-            <div>Region used: {regionUsed}</div>
-            <div>Available regions: {availableRegions.join(', ')}</div>
-          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function MiniLineChart({ points }: { points: Point[] }) {
-  console.log('🔍 MiniLineChart: Rendering with points:', points);
-  
-  const width = 900;
-  const height = 260;
-  const pad = 24;
-  const ys = points.map((p) => p.streams);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  
-  console.log('🔍 MiniLineChart: Chart dimensions:', { width, height, pad, minY, maxY, pointsLength: points.length });
 
-  // Handle single data point specially
-  if (points.length === 1) {
-    const point = points[0];
-    const x = width / 2; // Center horizontally
-    const y = height / 2; // Center vertically
-    
-    console.log('🔍 MiniLineChart: Single point at center:', { x, y, streams: point.streams });
-    
-    return (
-      <div className="border border-red-500 p-4 bg-red-900/20">
-        <div className="text-white mb-2">Chart Debug - Single Point: {point.streams.toLocaleString()} streams</div>
-        <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="border border-blue-500">
-          <rect x="0" y="0" width={width} height={height} fill="transparent" />
-          {/* Single point as a large circle */}
-          <circle 
-            cx={x} 
-            cy={y} 
-            r="20" 
-            fill="#7dd3fc" 
-            stroke="#0ea5e9" 
-            strokeWidth="3"
-          />
-          {/* Add text label */}
-          <text 
-            x={x} 
-            y={y + 40} 
-            textAnchor="middle" 
-            fill="#7dd3fc" 
-            fontSize="16"
-            fontWeight="bold"
-          >
-            {point.streams.toLocaleString()}
-          </text>
-          <text 
-            x={x} 
-            y={y + 60} 
-            textAnchor="middle" 
-            fill="#94a3b8" 
-            fontSize="12"
-          >
-            streams
-          </text>
-        </svg>
-      </div>
-    );
-  }
-
-  // Handle multiple points with line chart
-  const n = Math.max(points.length - 1, 1);
-  
-  const path = points
-    .map((p, i) => {
-      const x = pad + (i / n) * (width - pad * 2);
-      const y =
-        height - pad - ((p.streams - minY) / Math.max(maxY - minY, 1)) * (height - pad * 2);
-      console.log(`🔍 MiniLineChart: Point ${i}:`, { x, y, streams: p.streams });
-      return `${i === 0 ? "M" : "L"}${x},${y}`;
-    })
-    .join(" ");
-  
-  console.log('🔍 MiniLineChart: SVG path:', path);
-
-  return (
-    <div className="border border-red-500 p-4 bg-red-900/20">
-      <div className="text-white mb-2">Chart Debug - Line Chart: {points.length} points</div>
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="border border-blue-500">
-        <rect x="0" y="0" width={width} height={height} fill="transparent" />
-        <path d={path} stroke="#7dd3fc" strokeWidth="2" fill="none" />
-      </svg>
-    </div>
-  );
-}

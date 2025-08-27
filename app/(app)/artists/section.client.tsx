@@ -9,7 +9,7 @@ export default function ArtistsClient({ data }: { data: Item[] }) {
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [openName, setOpenName] = useState("");
-  const [series, setSeries] = useState<{ x: string; y: number }[] | null>(null);
+  const [series, setSeries] = useState<{ date: string; streams: number }[] | null>(null);
 
   const filtered = data.filter(i => i.name.toLowerCase().includes(q.toLowerCase()));
 
@@ -19,7 +19,7 @@ export default function ArtistsClient({ data }: { data: Item[] }) {
       setSeries(null);
       const res = await fetch(`/api/artist/${openId}/series`);
       const json = await res.json();
-      setSeries(json.series || []);
+      setSeries(json.points || []);
     }
     load();
   }, [openId]);
@@ -53,7 +53,7 @@ export default function ArtistsClient({ data }: { data: Item[] }) {
       <Modal open={!!openId} onClose={()=>setOpenId(null)} title={openName}>
         {!series && <div className="text-sm text-neutral-400">Loading…</div>}
         {series && series.length === 0 && <div className="text-sm text-neutral-400">No data yet.</div>}
-        {series && series.length > 0 && <ArtistChart points={series} />}
+        {series && series.length > 0 && <ArtistChart data={series} />}
       </Modal>
     </div>
   );
