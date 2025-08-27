@@ -162,6 +162,8 @@ export default function ArtistModal({
 }
 
 function MiniLineChart({ points }: { points: Point[] }) {
+  console.log('🔍 MiniLineChart: Rendering with points:', points);
+  
   const width = 900;
   const height = 260;
   const pad = 24;
@@ -169,20 +171,28 @@ function MiniLineChart({ points }: { points: Point[] }) {
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
   const n = Math.max(points.length - 1, 1);
+  
+  console.log('🔍 MiniLineChart: Chart dimensions:', { width, height, pad, minY, maxY, n });
 
   const path = points
     .map((p, i) => {
       const x = pad + (i / n) * (width - pad * 2);
       const y =
         height - pad - ((p.streams - minY) / Math.max(maxY - minY, 1)) * (height - pad * 2);
+      console.log(`🔍 MiniLineChart: Point ${i}:`, { x, y, streams: p.streams });
       return `${i === 0 ? "M" : "L"}${x},${y}`;
     })
     .join(" ");
+  
+  console.log('🔍 MiniLineChart: SVG path:', path);
 
   return (
-    <svg width="100%" viewBox={`0 0 ${width} ${height}`}>
-      <rect x="0" y="0" width={width} height={height} fill="transparent" />
-      <path d={path} stroke="#7dd3fc" strokeWidth="2" fill="none" />
-    </svg>
+    <div className="border border-red-500 p-4 bg-red-900/20">
+      <div className="text-white mb-2">Chart Debug - Points: {points.length}</div>
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="border border-blue-500">
+        <rect x="0" y="0" width={width} height={height} fill="transparent" />
+        <path d={path} stroke="#7dd3fc" strokeWidth="2" fill="none" />
+      </svg>
+    </div>
   );
 }
