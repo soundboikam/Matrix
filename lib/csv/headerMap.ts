@@ -1,7 +1,7 @@
 export type NormalizedRow = {
   artist: string;
   streams: number;
-  week: string; // ISO date yyyy-MM-dd
+  week?: string; // ISO date yyyy-MM-dd, optional during preview
 };
 
 export const HEADER_ALIASES = {

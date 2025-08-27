@@ -1,58 +1,63 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { parseCsvFile, applyWeekStartToMissing } from "@/lib/csv/parseCsv";
 import CsvPreviewTable from "@/components/csv/CsvPreviewTable";
 import type { NormalizedRow } from "@/lib/csv/headerMap";
+import { parse, isValid, format } from "date-fns";
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [region, setRegion] = useState<"US" | "EU">("US");
-  const [weekFormat, setWeekFormat] = useState<string>("MM/dd/yyyy"); // UI hint
-  const [weekStart, setWeekStart] = useState<string>(""); // yyyy-MM-dd from input
-  const [preview, setPreview] = useState<NormalizedRow[] | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
+  const [weekStartText, setWeekStartText] = useState<string>(""); // mm/dd/yyyy
+  const [previewRows, setPreviewRows] = useState<NormalizedRow[] | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const handleFile = (f: File | null) => {
-    setFile(f);
-    setPreview(null);
-    setWarnings([]);
-  };
+  const weekStartISO = useMemo(() => {
+    if (!weekStartText) return "";
+    const p = parse(weekStartText, "MM/dd/yyyy", new Date());
+    if (!isValid(p)) return "";
+    return format(p, "yyyy-MM-dd");
+  }, [weekStartText]);
 
-  async function onParse() {
-    if (!file) return;
+  const runParse = useCallback(async () => {
+    if (!file) {
+      setPreviewRows(null);
+      return;
+    }
     setBusy(true);
     try {
-      const result = await parseCsvFile(file, { weekFormat });
-      // If week column missing, use weekStart input:
-      const withWeek = applyWeekStartToMissing(result.included, weekStart || undefined);
-      setPreview(withWeek);
-      setWarnings(result.warnings);
-    } catch (e: any) {
-      setWarnings([e?.message || "Failed to parse CSV."]);
-      setPreview(null);
+      const res = await parseCsvFile(file, { weekFormat: "MM/dd/yyyy" });
+      const withWeek = applyWeekStartToMissing(res.included, weekStartISO || undefined);
+      setPreviewRows(withWeek);
+    } catch (e) {
+      setPreviewRows(null);
     } finally {
       setBusy(false);
     }
-  }
+  }, [file, weekStartISO]);
+
+  useEffect(() => {
+    runParse();
+  }, [runParse]);
 
   async function onImport() {
-    if (!preview || preview.length === 0) return;
-    // POST to your existing import API endpoint
+    if (!previewRows || previewRows.length === 0) return;
     await fetch("/api/import/streams", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows: preview, region }),
+      body: JSON.stringify({ rows: previewRows, region }),
     }).then(async (r) => {
       if (!r.ok) {
         const t = await r.text();
         alert("Import failed: " + t);
       } else {
         alert("Imported successfully");
-        setPreview(null);
+        setPreviewRows(null);
         setFile(null);
-        (document.getElementById("csv-input") as HTMLInputElement | null)?.value && ((document.getElementById("csv-input") as HTMLInputElement).value = "");
+        setWeekStartText("");
+        const inp = document.getElementById("csv-input") as HTMLInputElement | null;
+        if (inp) inp.value = "";
       }
     });
   }
@@ -69,7 +74,7 @@ export default function ImportPage() {
           id="csv-input"
           type="file"
           accept=".csv,text/csv"
-          onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="block text-sm"
         />
 
@@ -84,46 +89,23 @@ export default function ImportPage() {
 
         <input
           type="text"
-          value={weekFormat}
-          onChange={(e) => setWeekFormat(e.target.value)}
+          value={weekStartText}
+          onChange={(e) => setWeekStartText(e.target.value)}
+          placeholder="mm/dd/yyyy"
           className="rounded bg-black border border-gray-700 px-2 py-1 text-sm w-40"
-          placeholder="MM/dd/yyyy"
-          title="Expected week/date format in CSV"
+          title="Week start date (used if your CSV lacks a date column)"
         />
-
-        <input
-          type="date"
-          value={weekStart}
-          onChange={(e) => setWeekStart(e.target.value)}
-          className="rounded bg-black border border-gray-700 px-2 py-1 text-sm"
-        />
-
-        <button
-          onClick={onParse}
-          disabled={!file || busy}
-          className="rounded bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-sm"
-        >
-          {busy ? "Parsing..." : "Preview"}
-        </button>
 
         <button
           onClick={onImport}
-          disabled={!preview || preview.length === 0}
-          className="rounded bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-sm"
+          disabled={!previewRows || previewRows.length === 0 || busy}
+          className="rounded bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-sm"
         >
           Import to Database
         </button>
       </div>
 
-      {warnings.length > 0 && (
-        <div className="text-xs text-yellow-300 space-y-1">
-          {warnings.map((w, i) => (
-            <div key={i}>• {w}</div>
-          ))}
-        </div>
-      )}
-
-      {preview && <CsvPreviewTable initial={preview} />}
+      {previewRows && <CsvPreviewTable initial={previewRows} />}
     </div>
   );
 }

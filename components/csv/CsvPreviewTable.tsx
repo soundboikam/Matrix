@@ -32,73 +32,80 @@ export default function CsvPreviewTable({ initial }: { initial: NormalizedRow[] 
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="text-sm text-gray-300">
-        Rows in file: {counts.total} • Included: {counts.included} • Excluded: {counts.excluded}
+        Rows in file: {counts.total} - Included: {counts.included} - Excluded: {counts.excluded}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-700">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-900/50">
-            <tr>
-              <th className="px-3 py-2 text-left w-10"> </th>
-              <th className="px-3 py-2 text-left">Artist</th>
-              <th className="px-3 py-2 text-left">Streams</th>
-              <th className="px-3 py-2 text-left">Week</th>
-            </tr>
-          </thead>
-          <tbody>
-            {included.map((r, i) => (
-              <tr key={`${r.artist}-${r.week}-${i}`} className="border-t border-gray-800">
-                <td className="px-3 py-2">
-                  <button
-                    aria-label="Exclude row"
-                    onClick={() => excludeRow(i)}
-                    className="rounded border border-red-500/60 text-red-300 hover:bg-red-500/10 px-2 py-1"
-                  >
-                    ✕
-                  </button>
-                </td>
-                <td className="px-3 py-2">{r.artist}</td>
-                <td className="px-3 py-2">{r.streams.toLocaleString()}</td>
-                <td className="px-3 py-2">{r.week}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {excluded.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-yellow-700/40">
-          <div className="px-3 py-2 bg-yellow-900/20 text-yellow-200 text-xs">Excluded rows</div>
+      <div className="rounded-lg border border-gray-700 overflow-hidden">
+        <div className="px-3 py-2 text-xs text-gray-400 bg-black/40">
+          Preview (click ❌ to exclude a row; click ↺ to restore)
+        </div>
+        <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-900/50">
               <tr>
-                <th className="px-3 py-2 text-left w-10"> </th>
+                <th className="px-3 py-2 w-10 text-left"></th>
                 <th className="px-3 py-2 text-left">Artist</th>
                 <th className="px-3 py-2 text-left">Streams</th>
                 <th className="px-3 py-2 text-left">Week</th>
               </tr>
             </thead>
             <tbody>
-              {excluded.map((r, i) => (
-                <tr key={`ex-${r.artist}-${r.week}-${i}`} className="border-t border-gray-800">
+              {included.map((r, i) => (
+                <tr key={`${r.artist}-${r.week ?? "none"}-${i}`} className="border-t border-gray-800">
                   <td className="px-3 py-2">
                     <button
-                      aria-label="Restore row"
-                      onClick={() => restoreRow(i)}
-                      className="rounded border border-blue-500/60 text-blue-300 hover:bg-blue-500/10 px-2 py-1"
+                      aria-label="Exclude row"
+                      onClick={() => excludeRow(i)}
+                      className="rounded border border-pink-500 text-pink-300 hover:bg-pink-500/10 px-2 py-1"
                     >
-                      ↺
+                      ❌
                     </button>
                   </td>
                   <td className="px-3 py-2">{r.artist}</td>
-                  <td className="px-3 py-2">{r.streams.toLocaleString()}</td>
-                  <td className="px-3 py-2">{r.week}</td>
+                  <td className="px-3 py-2">{(r.streams ?? 0).toLocaleString()}</td>
+                  <td className="px-3 py-2">{r.week ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {excluded.length > 0 && (
+        <div className="rounded-lg border border-yellow-700/40 overflow-hidden">
+          <div className="px-3 py-2 bg-yellow-900/20 text-yellow-200 text-xs">Excluded rows</div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-900/50">
+                <tr>
+                  <th className="px-3 py-2 w-10 text-left"></th>
+                  <th className="px-3 py-2 text-left">Artist</th>
+                  <th className="px-3 py-2 text-left">Streams</th>
+                  <th className="px-3 py-2 text-left">Week</th>
+                </tr>
+              </thead>
+              <tbody>
+                {excluded.map((r, i) => (
+                  <tr key={`ex-${r.artist}-${r.week ?? "none"}-${i}`} className="border-t border-gray-800">
+                    <td className="px-3 py-2">
+                      <button
+                        aria-label="Restore row"
+                        onClick={() => restoreRow(i)}
+                        className="rounded border border-blue-500 text-blue-300 hover:bg-blue-500/10 px-2 py-1"
+                      >
+                        ↺
+                      </button>
+                    </td>
+                    <td className="px-3 py-2">{r.artist}</td>
+                    <td className="px-3 py-2">{(r.streams ?? 0).toLocaleString()}</td>
+                    <td className="px-3 py-2">{r.week ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

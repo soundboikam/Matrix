@@ -6,7 +6,7 @@ import { inferHeaderMapping, normalizeHeader, type NormalizedRow } from "@/lib/c
 const RowSchema = z.object({
   artist: z.string().min(1),
   streams: z.coerce.number().int().nonnegative(),
-  week: z.string(), // ISO yyyy-MM-dd
+  week: z.string().optional(), // optional during preview
 });
 
 export type ParsedPreview = {
@@ -22,16 +22,15 @@ export type ParsedPreview = {
 
 type FileLike = { arrayBuffer: () => Promise<ArrayBuffer> };
 
-/** Music Connect pre-clean:
- * - Remove UTF-8 BOM
- * - Drop leading report title rows until we see a header that contains "Artist Name"
- * - Drop copyright/footer rows that start with "Copyright (c)" etc
+/** Clean Music Connect artifacts:
+ * - Strip BOM
+ * - Drop leading title rows until we find a header that contains "Artist Name"
+ * - Drop copyright/footer rows
  */
 function preCleanMusicConnectCsv(text: string): string {
   const noBom = text.replace(/^\uFEFF/, "");
   const lines = noBom.split(/\r?\n/);
 
-  // Find the first plausible header line that includes "Artist Name" (normalized)
   const isHeader = (line: string) => normalizeHeader(line).includes("artist name");
 
   let headerIdx = -1;
@@ -42,17 +41,14 @@ function preCleanMusicConnectCsv(text: string): string {
     }
   }
 
-  // If we found a header later in the file, drop everything before it
   let trimmed = headerIdx >= 0 ? lines.slice(headerIdx) : lines;
 
-  // Remove trailing copyright/footer lines
   trimmed = trimmed.filter(
     (ln) =>
       !/^copyright\s*\(c\)/i.test(ln.trim()) &&
-      !/luminate data/i.test(ln.trim()) // extra safety
+      !/luminate data/i.test(ln.trim())
   );
 
-  // Remove trailing empty lines
   while (trimmed.length && trimmed[trimmed.length - 1].trim() === "") trimmed.pop();
 
   return trimmed.join("\n");
@@ -97,8 +93,6 @@ function coerceDateToISO(value: unknown, weekFormatHint?: string): string | null
 export async function parseCsvFile(file: FileLike, opts?: { weekFormat?: string }): Promise<ParsedPreview> {
   const ab = await file.arrayBuffer();
   const raw = new TextDecoder("utf-8", { fatal: false }).decode(ab);
-
-  // NEW: pre-clean Music Connect artifacts so Papa sees the real header row
   const text = preCleanMusicConnectCsv(raw);
 
   const result = Papa.parse(text, {
@@ -109,48 +103,43 @@ export async function parseCsvFile(file: FileLike, opts?: { weekFormat?: string 
     transformHeader: (h) => normalizeHeader(h),
   });
 
-  const originalHeaders: string[] = result.meta.fields ?? [];
-  const mapping = inferHeaderMapping(originalHeaders);
+  const headers: string[] = result.meta.fields ?? [];
+  const mapping = inferHeaderMapping(headers);
 
   const warnings: string[] = [];
-
   if (!mapping.artistKey) warnings.push("Could not find an Artist column.");
   if (!mapping.streamsKey) warnings.push("Could not find a Streams/Plays column.");
-  if (!mapping.weekKey) warnings.push("No Week/Date column found. Using 'Week Start' input value will be required.");
+  if (!mapping.weekKey) warnings.push("No Week/Date column found. Use Week Start input.");
 
-  const rows: NormalizedRow[] = [];
+  const included: NormalizedRow[] = [];
+  const excluded: NormalizedRow[] = [];
 
   for (const rawRow of result.data as Record<string, unknown>[]) {
-    // Map using normalized keys
     const artistVal = mapping.artistKey ? rawRow[mapping.artistKey] : rawRow["artist"];
     const streamsVal = mapping.streamsKey ? rawRow[mapping.streamsKey] : rawRow["streams"];
     const weekVal = mapping.weekKey ? rawRow[mapping.weekKey] : rawRow["week"];
 
     const artist = (artistVal ?? "").toString().trim();
     const streams = coerceNumber(streamsVal);
-    const weekISO = coerceDateToISO(weekVal, opts?.weekFormat);
+    const weekISO = coerceDateToISO(weekVal, opts?.weekFormat) ?? undefined;
 
-    // Only process rows that have required fields
-    if (artist && streams !== null && weekISO) {
+    // Only process rows that have required fields (artist and streams)
+    if (artist && streams !== null) {
       const row: NormalizedRow = {
         artist,
         streams,
         week: weekISO,
       };
-      rows.push(row);
+      included.push(row);
     } else {
       // Skip rows missing required data
-      const missing = [];
-      if (!artist) missing.push("artist");
-      if (streams === null) missing.push("streams");
-      if (!weekISO) missing.push("week");
-      warnings.push(`Skipped row missing: ${missing.join(", ")}`);
+      excluded.push({ artist, streams: streams ?? 0, week: weekISO });
     }
   }
 
   return {
-    included: rows,
-    excluded: [],
+    included,
+    excluded,
     warnings,
     headerMapping: mapping,
   };
@@ -158,5 +147,5 @@ export async function parseCsvFile(file: FileLike, opts?: { weekFormat?: string 
 
 export function applyWeekStartToMissing(rows: NormalizedRow[], weekStartISO?: string): NormalizedRow[] {
   if (!weekStartISO) return rows;
-  return rows.map(r => ({ ...r, week: r.week || weekStartISO }));
+  return rows.map(r => ({ ...r, week: r.week ?? weekStartISO }));
 }
