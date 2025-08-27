@@ -170,10 +170,59 @@ function MiniLineChart({ points }: { points: Point[] }) {
   const ys = points.map((p) => p.streams);
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
+  
+  console.log('🔍 MiniLineChart: Chart dimensions:', { width, height, pad, minY, maxY, pointsLength: points.length });
+
+  // Handle single data point specially
+  if (points.length === 1) {
+    const point = points[0];
+    const x = width / 2; // Center horizontally
+    const y = height / 2; // Center vertically
+    
+    console.log('🔍 MiniLineChart: Single point at center:', { x, y, streams: point.streams });
+    
+    return (
+      <div className="border border-red-500 p-4 bg-red-900/20">
+        <div className="text-white mb-2">Chart Debug - Single Point: {point.streams.toLocaleString()} streams</div>
+        <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="border border-blue-500">
+          <rect x="0" y="0" width={width} height={height} fill="transparent" />
+          {/* Single point as a large circle */}
+          <circle 
+            cx={x} 
+            cy={y} 
+            r="20" 
+            fill="#7dd3fc" 
+            stroke="#0ea5e9" 
+            strokeWidth="3"
+          />
+          {/* Add text label */}
+          <text 
+            x={x} 
+            y={y + 40} 
+            textAnchor="middle" 
+            fill="#7dd3fc" 
+            fontSize="16"
+            fontWeight="bold"
+          >
+            {point.streams.toLocaleString()}
+          </text>
+          <text 
+            x={x} 
+            y={y + 60} 
+            textAnchor="middle" 
+            fill="#94a3b8" 
+            fontSize="12"
+          >
+            streams
+          </text>
+        </svg>
+      </div>
+    );
+  }
+
+  // Handle multiple points with line chart
   const n = Math.max(points.length - 1, 1);
   
-  console.log('🔍 MiniLineChart: Chart dimensions:', { width, height, pad, minY, maxY, n });
-
   const path = points
     .map((p, i) => {
       const x = pad + (i / n) * (width - pad * 2);
@@ -188,7 +237,7 @@ function MiniLineChart({ points }: { points: Point[] }) {
 
   return (
     <div className="border border-red-500 p-4 bg-red-900/20">
-      <div className="text-white mb-2">Chart Debug - Points: {points.length}</div>
+      <div className="text-white mb-2">Chart Debug - Line Chart: {points.length} points</div>
       <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="border border-blue-500">
         <rect x="0" y="0" width={width} height={height} fill="transparent" />
         <path d={path} stroke="#7dd3fc" strokeWidth="2" fill="none" />
