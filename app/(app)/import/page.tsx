@@ -1,24 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseCsvFile, applyWeekStartToMissing } from "@/lib/csv/parseCsv";
 import CsvPreviewTable from "@/components/csv/CsvPreviewTable";
 import type { NormalizedRow } from "@/lib/csv/headerMap";
-import { parse, isValid, format } from "date-fns";
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [region, setRegion] = useState<"US" | "EU">("US");
-  const [weekStartText, setWeekStartText] = useState<string>(""); // mm/dd/yyyy
+  // Store week start as ISO (yyyy-MM-dd) for type=date
+  const [weekStartISO, setWeekStartISO] = useState<string>("");
   const [previewRows, setPreviewRows] = useState<NormalizedRow[] | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const weekStartISO = useMemo(() => {
-    if (!weekStartText) return "";
-    const p = parse(weekStartText, "MM/dd/yyyy", new Date());
-    if (!isValid(p)) return "";
-    return format(p, "yyyy-MM-dd");
-  }, [weekStartText]);
+  const dateRef = useRef<HTMLInputElement>(null);
+
+  const canImport = useMemo(() => {
+    if (!previewRows || previewRows.length === 0) return false;
+    // Prevent import if any row still lacks week
+    const missingWeek = previewRows.some(r => !r.week || r.week.trim() === "");
+    if (missingWeek) return false;
+    return !busy;
+  }, [previewRows, busy]);
 
   const runParse = useCallback(async () => {
     if (!file) {
@@ -27,10 +30,12 @@ export default function ImportPage() {
     }
     setBusy(true);
     try {
+      // parseCsvFile auto-detects Music Connect + title/footer, returns rows (week may be missing)
       const res = await parseCsvFile(file, { weekFormat: "MM/dd/yyyy" });
+      // Fill any missing weeks from the Week Start field
       const withWeek = applyWeekStartToMissing(res.included, weekStartISO || undefined);
       setPreviewRows(withWeek);
-    } catch (e) {
+    } catch {
       setPreviewRows(null);
     } finally {
       setBusy(false);
@@ -38,6 +43,7 @@ export default function ImportPage() {
   }, [file, weekStartISO]);
 
   useEffect(() => {
+    // re-parse whenever file changes or weekStart changes
     runParse();
   }, [runParse]);
 
@@ -55,11 +61,18 @@ export default function ImportPage() {
         alert("Imported successfully");
         setPreviewRows(null);
         setFile(null);
-        setWeekStartText("");
+        setWeekStartISO("");
         const inp = document.getElementById("csv-input") as HTMLInputElement | null;
         if (inp) inp.value = "";
       }
     });
+  }
+
+  function openCalendar() {
+    const el = dateRef.current;
+    if (!el) return;
+    // Chromium supports showPicker(); fallback to focus for others
+    (el as any).showPicker ? (el as any).showPicker() : el.focus();
   }
 
   return (
@@ -87,25 +100,49 @@ export default function ImportPage() {
           <option value="EU">EU</option>
         </select>
 
-        <input
-          type="text"
-          value={weekStartText}
-          onChange={(e) => setWeekStartText(e.target.value)}
-          placeholder="mm/dd/yyyy"
-          className="rounded bg-black border border-gray-700 px-2 py-1 text-sm w-40"
-          title="Week start date (used if your CSV lacks a date column)"
-        />
+        {/* Calendar input with icon */}
+        <div className="relative">
+          <input
+            ref={dateRef}
+            type="date"
+            value={weekStartISO}
+            onChange={(e) => setWeekStartISO(e.target.value)}
+            className="rounded bg-black border border-gray-700 px-2 pr-9 py-1 text-sm"
+            title="Week start date (used if your CSV lacks a date column)"
+          />
+          <button
+            type="button"
+            onClick={openCalendar}
+            aria-label="Open calendar"
+            className="absolute right-2 top-1/2 -translate-y-1/2 opacity-80 hover:opacity-100"
+          >
+            {/* Inline calendar icon (no dependency) */}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </button>
+        </div>
 
         <button
           onClick={onImport}
-          disabled={!previewRows || previewRows.length === 0 || busy}
-          className="rounded bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-sm"
+          disabled={!canImport}
+          className="rounded bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-sm disabled:opacity-50"
         >
-          Import to Database
+          {busy ? "Working..." : "Import to Database"}
         </button>
       </div>
 
       {previewRows && <CsvPreviewTable initial={previewRows} />}
+
+      {/* Optional: subtle hint if week is missing */}
+      {previewRows && previewRows.some(r => !r.week) && (
+        <div className="text-xs text-yellow-300">
+          Some rows are missing a date. Set <span className="font-medium">Week Start</span> to enable import.
+        </div>
+      )}
     </div>
   );
 }
