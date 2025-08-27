@@ -23,6 +23,10 @@ export const HEADER_ALIASES = {
     "total plays",
     "count",
     "units",
+    "on demand audio streams",
+    "on-demand audio streams",
+    "ondemand audio streams",
+    "audio streams",
   ],
   week: [
     "week",

@@ -1,5 +1,3 @@
-
-
 import Papa from "papaparse";
 import { z } from "zod";
 import { format, parse, isValid } from "date-fns";
@@ -24,11 +22,46 @@ export type ParsedPreview = {
 
 type FileLike = { arrayBuffer: () => Promise<ArrayBuffer> };
 
+/** Music Connect pre-clean:
+ * - Remove UTF-8 BOM
+ * - Drop leading report title rows until we see a header that contains "Artist Name"
+ * - Drop copyright/footer rows that start with "Copyright (c)" etc
+ */
+function preCleanMusicConnectCsv(text: string): string {
+  const noBom = text.replace(/^\uFEFF/, "");
+  const lines = noBom.split(/\r?\n/);
+
+  // Find the first plausible header line that includes "Artist Name" (normalized)
+  const isHeader = (line: string) => normalizeHeader(line).includes("artist name");
+
+  let headerIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (isHeader(lines[i])) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  // If we found a header later in the file, drop everything before it
+  let trimmed = headerIdx >= 0 ? lines.slice(headerIdx) : lines;
+
+  // Remove trailing copyright/footer lines
+  trimmed = trimmed.filter(
+    (ln) =>
+      !/^copyright\s*\(c\)/i.test(ln.trim()) &&
+      !/luminate data/i.test(ln.trim()) // extra safety
+  );
+
+  // Remove trailing empty lines
+  while (trimmed.length && trimmed[trimmed.length - 1].trim() === "") trimmed.pop();
+
+  return trimmed.join("\n");
+}
+
 function coerceNumber(value: unknown): number | null {
   if (value == null) return null;
-  if (typeof value === "number" && !Number.isNaN(value)) return value;
+  if (typeof value === "number" && !Number.isNaN(value)) return Math.round(value);
   if (typeof value === "string") {
-    // remove thousand separators and spaces, accept comma or dot decimal (we round)
     const cleaned = value.replace(/[, ]+/g, "");
     const n = Number(cleaned);
     if (!Number.isNaN(n)) return Math.round(n);
@@ -39,27 +72,22 @@ function coerceNumber(value: unknown): number | null {
 function coerceDateToISO(value: unknown, weekFormatHint?: string): string | null {
   if (!value) return null;
 
-  // If already ISO:
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
     return value;
   }
 
   const str = String(value).trim();
 
-  // If caller passed a UI week start format (e.g., "MM/dd/yyyy" or "mm/dd/yyyy")
-  // try that first. (We accept both mm and MM)
   const fmt = weekFormatHint?.replace(/m/g, "M") ?? "MM/dd/yyyy";
   const parsed = parse(str, fmt, new Date());
   if (isValid(parsed)) return format(parsed, "yyyy-MM-dd");
 
-  // Try some common fallbacks:
   const candidates = ["M/d/yyyy", "MM/dd/yyyy", "yyyy-MM-dd", "d/M/yyyy", "dd/MM/yyyy"];
   for (const c of candidates) {
     const p = parse(str, c, new Date());
     if (isValid(p)) return format(p, "yyyy-MM-dd");
   }
 
-  // Last resort: Date(str)
   const d = new Date(str);
   if (isValid(d)) return format(d, "yyyy-MM-dd");
 
@@ -68,9 +96,11 @@ function coerceDateToISO(value: unknown, weekFormatHint?: string): string | null
 
 export async function parseCsvFile(file: FileLike, opts?: { weekFormat?: string }): Promise<ParsedPreview> {
   const ab = await file.arrayBuffer();
-  const text = new TextDecoder("utf-8", { fatal: false }).decode(ab).replace(/^\uFEFF/, ""); // strip BOM
+  const raw = new TextDecoder("utf-8", { fatal: false }).decode(ab);
 
-  // Detect delimiter automatically; header row present
+  // NEW: pre-clean Music Connect artifacts so Papa sees the real header row
+  const text = preCleanMusicConnectCsv(raw);
+
   const result = Papa.parse(text, {
     header: true,
     dynamicTyping: false,
@@ -78,11 +108,6 @@ export async function parseCsvFile(file: FileLike, opts?: { weekFormat?: string 
     delimitersToGuess: [",", "\t", ";", "|"],
     transformHeader: (h) => normalizeHeader(h),
   });
-
-  if (result.errors?.length) {
-    // If we failed, try again without header in case the file has no header
-    // (we still prefer headered CSVs for UX)
-  }
 
   const originalHeaders: string[] = result.meta.fields ?? [];
   const mapping = inferHeaderMapping(originalHeaders);
@@ -95,10 +120,11 @@ export async function parseCsvFile(file: FileLike, opts?: { weekFormat?: string 
 
   const rows: NormalizedRow[] = [];
 
-  for (const raw of result.data as Record<string, unknown>[]) {
-    const artistVal = mapping.artistKey ? raw[mapping.artistKey] : raw["artist"];
-    const streamsVal = mapping.streamsKey ? raw[mapping.streamsKey] : raw["streams"];
-    const weekVal = mapping.weekKey ? raw[mapping.weekKey] : raw["week"];
+  for (const rawRow of result.data as Record<string, unknown>[]) {
+    // Map using normalized keys
+    const artistVal = mapping.artistKey ? rawRow[mapping.artistKey] : rawRow["artist"];
+    const streamsVal = mapping.streamsKey ? rawRow[mapping.streamsKey] : rawRow["streams"];
+    const weekVal = mapping.weekKey ? rawRow[mapping.weekKey] : rawRow["week"];
 
     const artist = (artistVal ?? "").toString().trim();
     const streams = coerceNumber(streamsVal);
